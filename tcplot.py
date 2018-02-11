@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.path import Path
 import matplotlib
 import sys
 import getopt
@@ -16,23 +17,23 @@ fig_size_y = 2.5
 fig_dpi = 300
 
 
-def tcbase(df,ax):
+def tcbase(df, ax):
 
-    od = list(range(1, len(df.id.tolist()) + 1))
-    ax.plot(od, df.value, linewidth=2.0, zorder=1)
-    plt.xticks(od, df.id.tolist(), rotation=-90)
+    ax.plot(df.ord, df.value, linewidth=2.0, zorder=1)
+    plt.xticks(df.ord, df.id.tolist(), rotation=-90)
     ax.tick_params(labelsize=6)
-    ax.set_xlim([0.5, 7.5])
+    ax.set_xlim([min(df.ord) - 0.5, max(df.ord) + 0.5])
     ax.set_ylim([0, 4])
 
+    ax_width = max(df.ord) - min(df.ord) + 1
     dot_radius = 0.1 * fig_size_y * ax_size_y
-    for x, y in zip(od, df.value):
+    for x, y in zip(df.ord, df.value):
         ax.add_patch(
             patches.Ellipse(
                 (x, y),
                 dot_radius,
-                dot_radius / ((fig_size_y / fig_size_x) * \
-                              (ax_size_y / ax_size_x) / (4 / 7)),
+                dot_radius / ((fig_size_y / fig_size_x) *
+                              (ax_size_y / ax_size_x) / (4 / ax_width)),
                 clip_on=False,
                 zorder=200,
                 color='r'
@@ -42,14 +43,46 @@ def tcbase(df,ax):
             patches.Ellipse(
                 (x, y),
                 dot_radius,
-                dot_radius / ((fig_size_y / fig_size_x) * \
-                              (ax_size_y / ax_size_x) / (4 / 7)),
+                dot_radius / ((fig_size_y / fig_size_x) *
+                              (ax_size_y / ax_size_x) / (4 / ax_width)),
                 clip_on=False,
                 fill=False,
                 zorder=200,
                 linewidth=2,
             )
         )
+
+
+def get_sep(df, group_name):
+    gn = df[group_name].tolist()
+    current = gn[0]
+    sep = [0]
+    for idx, n in enumerate(gn[1:]):
+        if current != n:
+            sep.append(idx + 1)
+            current = n
+
+    sep.append(idx + 2)
+    return sep
+
+
+def add_group_line(df, ax, group_name):
+    sep = get_sep(df, group_name)
+    for s in sep:
+        codes = [Path.MOVETO, Path.LINETO]
+        vertices = [(s, -0.7 / (fig_size_y * ax_size_y / 4)),
+                    (s, -1 / (fig_size_y * ax_size_y / 4))]
+        vertices = np.array(vertices, float)
+        mypath = Path(vertices, codes)
+        ax.add_patch(
+            patches.PathPatch(
+                mypath,
+                clip_on=False,
+                zorder=200,
+                linewidth=0.5,
+            )
+        )
+    return
 
 
 def readdata(fn):
@@ -65,11 +98,13 @@ def main(arglist):
 
     plt.clf()
     plt.close()
-    
+
     fig = plt.figure(figsize=[fig_size_x, fig_size_y], dpi=fig_dpi)
     ax = fig.add_axes([ax_offset_x, ax_offset_y, ax_size_x, ax_size_y])
 
-    tcbase(df,ax)
+    df['ord'] = np.arange(0.5, len(df.id.tolist()) + 0.5)
+    tcbase(df, ax)
+    add_group_line(df, ax, 't2')
 
     plt.savefig(arglist[1])
 
