@@ -3,9 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.path import Path
-import matplotlib
 import sys
 import getopt
+import argparse
 
 ax_offset_x = 0.05
 ax_offset_y = 0.45
@@ -90,11 +90,12 @@ def readdata(fn):
     return pd.read_excel(fn, sheet_name='Sheet1')
 
 
-def main(arglist):
+def main(dic_arg):
 
-    df = readdata(arglist[0])
+    df = readdata(dic_arg['input'][0])
 
-    matplotlib.rc('lines', linewidth=2, color='r')
+    df.sort_values(by='t1', inplace=True)
+    df['ord'] = np.arange(0.5, len(df.id.tolist()) + 0.5)
 
     plt.clf()
     plt.close()
@@ -102,14 +103,20 @@ def main(arglist):
     fig = plt.figure(figsize=[fig_size_x, fig_size_y], dpi=fig_dpi)
     ax = fig.add_axes([ax_offset_x, ax_offset_y, ax_size_x, ax_size_y])
 
-    df['ord'] = np.arange(0.5, len(df.id.tolist()) + 0.5)
     tcbase(df, ax)
-    add_group_line(df, ax, 't2')
+    add_group_line(df, ax, 't1')
 
-    plt.savefig(arglist[1])
+    plt.savefig(dic_arg['output'][0])
 
 
 if __name__ == '__main__':
 
-    if (len(sys.argv) > 0):
-        main(sys.argv[1:])
+    parser = argparse.ArgumentParser(description='Produce Pivot Chart')
+    parser.add_argument('-i', '--input', metavar='INPUT',
+                        nargs=1, help="excel file", required=True)
+    parser.add_argument('-o', '--output', metavar='OUTPUT',
+                        nargs=1, help="output file path", required=True)
+
+    args = parser.parse_args()
+
+    main(vars(args))
