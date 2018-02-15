@@ -53,8 +53,8 @@ def tcbase(df, ax):
         )
 
 
-def get_sep(df, group_name):
-    gn = df[group_name].tolist()
+def get_sep(df, group_id):
+    gn = df[group_id].tolist()
     current = gn[0]
     sep = [0]
     for idx, n in enumerate(gn[1:]):
@@ -66,12 +66,12 @@ def get_sep(df, group_name):
     return sep
 
 
-def add_group_line(df, ax, group_name):
-    sep = get_sep(df, group_name)
+def add_group_line(df, ax, group_id, level):
+    sep = get_sep(df, group_id)
     for s in sep:
         codes = [Path.MOVETO, Path.LINETO]
-        vertices = [(s, -0.7 / (fig_size_y * ax_size_y / 4)),
-                    (s, -1 / (fig_size_y * ax_size_y / 4))]
+        vertices = [(s, (-0.72 - 0.2 * level) / (fig_size_y * ax_size_y / 4)),
+                    (s, (-0.88 - 0.2 * level) / (fig_size_y * ax_size_y / 4))]
         vertices = np.array(vertices, float)
         mypath = Path(vertices, codes)
         ax.add_patch(
@@ -79,7 +79,7 @@ def add_group_line(df, ax, group_name):
                 mypath,
                 clip_on=False,
                 zorder=200,
-                linewidth=0.5,
+                linewidth=0.75,
             )
         )
     return
@@ -94,7 +94,9 @@ def main(dic_arg):
 
     df = readdata(dic_arg['input'][0])
 
-    df.sort_values(by='t1', inplace=True)
+    if (dic_arg['group']) != None:
+        df.sort_values(by=dic_arg['group'], inplace=True)
+
     df['ord'] = np.arange(0.5, len(df.id.tolist()) + 0.5)
 
     plt.clf()
@@ -104,18 +106,24 @@ def main(dic_arg):
     ax = fig.add_axes([ax_offset_x, ax_offset_y, ax_size_x, ax_size_y])
 
     tcbase(df, ax)
-    add_group_line(df, ax, 't1')
+
+    if (dic_arg['group']) != None:
+        for level, group_id in enumerate(dic_arg['group']):
+            add_group_line(df, ax, group_id, level)
 
     plt.savefig(dic_arg['output'][0])
 
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Produce Pivot Chart')
+    parser = argparse.ArgumentParser(
+        description='Produce pivot charts from data')
     parser.add_argument('-i', '--input', metavar='INPUT',
                         nargs=1, help="excel file", required=True)
     parser.add_argument('-o', '--output', metavar='OUTPUT',
                         nargs=1, help="output file path", required=True)
+    parser.add_argument('-g', '--group', metavar='GROUPS',
+                        nargs='+', help="group ids")
 
     args = parser.parse_args()
 
