@@ -16,6 +16,8 @@ fig_size_x = 10
 fig_size_y = 2.5
 fig_dpi = 300
 
+dot_radius_px = 0.1 * fig_size_y * ax_size_y
+
 
 def tcbase(df, ax):
 
@@ -26,13 +28,13 @@ def tcbase(df, ax):
     ax.set_ylim([0, 4])
 
     ax_width = max(df.ord) - min(df.ord) + 1
-    dot_radius = 0.1 * fig_size_y * ax_size_y
+
     for x, y in zip(df.ord, df.value):
         ax.add_patch(
             patches.Ellipse(
                 (x, y),
-                dot_radius,
-                dot_radius / ((fig_size_y / fig_size_x) *
+                dot_radius_px,
+                dot_radius_px / ((fig_size_y / fig_size_x) *
                               (ax_size_y / ax_size_x) / (4 / ax_width)),
                 clip_on=False,
                 zorder=200,
@@ -42,8 +44,8 @@ def tcbase(df, ax):
         ax.add_patch(
             patches.Ellipse(
                 (x, y),
-                dot_radius,
-                dot_radius / ((fig_size_y / fig_size_x) *
+                dot_radius_px,
+                dot_radius_px / ((fig_size_y / fig_size_x) *
                               (ax_size_y / ax_size_x) / (4 / ax_width)),
                 clip_on=False,
                 fill=False,
@@ -66,22 +68,37 @@ def get_sep(df, group_id):
     return sep
 
 
-def add_group_line(df, ax, group_id, level):
+def add_group_sep(df, ax, group_id, level, mode='line'):
     sep = get_sep(df, group_id)
-    for s in sep:
-        codes = [Path.MOVETO, Path.LINETO]
-        vertices = [(s, (-0.72 - 0.2 * level) / (fig_size_y * ax_size_y / 4)),
-                    (s, (-0.88 - 0.2 * level) / (fig_size_y * ax_size_y / 4))]
-        vertices = np.array(vertices, float)
-        mypath = Path(vertices, codes)
-        ax.add_patch(
-            patches.PathPatch(
-                mypath,
-                clip_on=False,
-                zorder=200,
-                linewidth=0.75,
+    if mode == 'line':
+        for s in sep:
+            codes = [Path.MOVETO, Path.LINETO]
+            vertices = [(s, (-0.72 - 0.2 * level) / (fig_size_y * ax_size_y / 4)),
+                        (s, (-0.88 - 0.2 * level) / (fig_size_y * ax_size_y / 4))]
+            vertices = np.array(vertices, float)
+            mypath = Path(vertices, codes)
+            ax.add_patch(
+                patches.PathPatch(
+                    mypath,
+                    clip_on=False,
+                    zorder=200,
+                    linewidth=0.75,
+                )
             )
-        )
+    elif mode == 'box':
+        for s1, s2 in zip(sep[1:], sep[:-1]):
+            ax.add_patch(
+                patches.Rectangle(
+                    (s1, (-0.88 - 0.2 * level) / (fig_size_y * ax_size_y / 4)),
+                    s2 - s1,
+                    0.16 / (fig_size_y * ax_size_y / 4),
+                    fill=False,
+                    clip_on=False,
+                    zorder=200,
+                    linewidth=0.75,
+                )
+            )
+
     return
 
 
@@ -109,7 +126,7 @@ def main(dic_arg):
 
     if (dic_arg['group']) != None:
         for level, group_id in enumerate(dic_arg['group']):
-            add_group_line(df, ax, group_id, level)
+            add_group_sep(df, ax, group_id, level,mode='box')
 
     plt.savefig(dic_arg['output'][0])
 
