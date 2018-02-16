@@ -11,7 +11,7 @@ ax_size_x_ratio = 0.925
 ax_size_y_ratio = 0.5
 
 fig_size_x_in = 10
-fig_size_y_in = 3.1
+fig_size_y_in = 2.5
 dot_radius_in = 0.1
 
 igroup_indi_offset_y_in = 0.6
@@ -138,8 +138,8 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
 
 def add_spec_line(df, ax, spec, label, para, col='r'):
     ax.plot([para['lim_x_min'], para['lim_x_max']],
-            [spec, spec], '--', linewidth=1.0, zorder=1,color=col)
-    ax.text(0, spec, label, ha='left', va='bottom',color=col)
+            [spec, spec], '--', linewidth=1.0, zorder=1, color=col)
+    ax.text(0, spec, label, ha='left', va='bottom', color=col)
     return
 
 
@@ -160,8 +160,9 @@ def get_sep(df, group_id):
     return sep, group
 
 
-def readdata(fn):
+def readdata(para):
 
+    fn = para['input'][0]
     try:
         out = pd.read_excel(fn, sheet_name='Sheet1')
     except:
@@ -170,15 +171,22 @@ def readdata(fn):
     return out
 
 
-def main(dic_arg):
+def groupdata(df, para):
+
+    if (para['group']) != None:
+        df.sort_values(by=para['group'], inplace=True)
+    df['ORD'] = np.arange(0.5, len(df.id.tolist()) + 0.5)
+
+    return
+
+
+def main(para):
 
     # read data to dataframe
-    df = readdata(dic_arg['input'][0])
+    df = readdata(para)
 
     # sort dataframe by group
-    if (dic_arg['group']) != None:
-        df.sort_values(by=dic_arg['group'], inplace=True)
-    df['ORD'] = np.arange(0.5, len(df.id.tolist()) + 0.5)
+    groupdata(df, para)
 
     # build dict for plot parameters
     dic_plot_para = dict()
@@ -186,8 +194,8 @@ def main(dic_arg):
     dic_plot_para['lim_x_min'] = 0
     dic_plot_para['lim_x_max'] = len(df.id.tolist())
     dic_plot_para['lim_y_min'] = 0
-    if dic_arg['ymax'] != None:
-        dic_plot_para['lim_y_max'] = dic_arg['ymax'][0]
+    if para['ymax'] != None:
+        dic_plot_para['lim_y_max'] = para['ymax'][0]
     else:
         dic_plot_para['lim_y_max'] = max(df.value)
 
@@ -202,17 +210,18 @@ def main(dic_arg):
     # plot base plot
     tcbase(df, ax, dic_plot_para)
 
-    add_spec_line(df, ax, 3, 'GB', dic_plot_para)
+    # add spec line
+    for spec_name, spec_value in zip(para['spec'][::2], para['spec'][1::2]):
+        add_spec_line(df, ax, int(spec_value), spec_name, dic_plot_para)
 
     # add grouping indicators
-    dic_plot_para['color_table'] = {}
-    if (dic_arg['group']) != None:
-        for level, group_id in enumerate(dic_arg['group']):
-            add_group_sep(df, ax, group_id, len(dic_arg['group']) - level - 1,
-                          mode=dic_arg['groupstyle'][0], para=dic_plot_para)
+    if (para['group']) != None:
+        for level, group_id in enumerate(para['group']):
+            add_group_sep(df, ax, group_id, len(para['group']) - level - 1,
+                          mode=para['groupstyle'][0], para=dic_plot_para)
 
     # save figure to file
-    plt.savefig(dic_arg['output'][0])
+    plt.savefig(para['output'][0])
 
 
 if __name__ == '__main__':
@@ -234,9 +243,10 @@ if __name__ == '__main__':
                         nargs=1, type=int, help="data y upper limit")
     parser.add_argument('-g', '--group', metavar='GROUPS',
                         nargs='+', help="grouping condition")
-    parser.add_argument('--groupstyle', metavar='STYLE', default=['line'], type=str,
+    parser.add_argument('--groupstyle', metavar='STYLE', default=['box'], type=str,
                         nargs=1, help="grouping style (line or box)")
+    parser.add_argument('--spec', metavar='SPEC',
+                        nargs='+', help="add spec indication")
 
     args = parser.parse_args()
-
     main(vars(args))
