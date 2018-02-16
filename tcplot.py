@@ -3,47 +3,50 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.path import Path
-import sys
-import getopt
 import argparse
 
-ax_offset_x = 0.05
-ax_offset_y = 0.45
+ax_offset_x_ratio = 0.05
+ax_offset_y_ratio = 0.45
 ax_size_x_ratio = 0.925
 ax_size_y_ratio = 0.5
 
-fig_size_x_inch = 10
-fig_size_y_inch = 2.5
-dot_radius_inch = 0.1
+fig_size_x_in = 10
+fig_size_y_in = 2.5
+dot_radius_in = 0.1
+
+igroup_indi_offset_y_in = 0.6
+igroup_indi_height_y_in = 0.2
+igroup_indi_sep_y_in = 0.02
 
 fig_dpi = 300
 
 
-def tcbase(df, ax, dic_plot_para):
+def tcbase(df, ax, para):
 
-    xlim_min = dic_plot_para['xlim_min']
-    xlim_max = dic_plot_para['xlim_max']
-    ylim_min = dic_plot_para['ylim_min']
-    ylim_max = dic_plot_para['ylim_max']
+    lim_x_min = para['lim_x_min']
+    lim_x_max = para['lim_x_max']
+    lim_y_min = para['lim_y_min']
+    lim_y_max = para['lim_y_max']
+
+    ax_height = para['lim_y_max'] - para['lim_y_min']
+    ax_width = para['lim_x_max'] - para['lim_x_min']
 
     ax.plot(df.ORD, df.value, linewidth=2.0, zorder=1)
     plt.xticks(df.ORD, df.id.tolist(), rotation=-90)
     ax.tick_params(labelsize=6)
 
-    ax.set_xlim([xlim_min, xlim_max])
-    ax.set_ylim([ylim_min, ylim_max])
+    ax.set_xlim([lim_x_min, lim_x_max])
+    ax.set_ylim([lim_y_min, lim_y_max])
 
-    ax_width = max(df.ORD) - min(df.ORD) + 1
-
-    dot_radius_x = (dot_radius_inch / fig_size_y_inch *
+    dot_radius_x = (dot_radius_in / fig_size_y_in *
                     ax_size_y_ratio) * ax_width
     for x, y in zip(df.ORD, df.value):
         ax.add_patch(
             patches.Ellipse(
                 (x, y),
                 dot_radius_x,
-                dot_radius_x / ((fig_size_y_inch / fig_size_x_inch) *
-                                (ax_size_y_ratio / ax_size_x_ratio) / (4 / ax_width)),
+                dot_radius_x / ((fig_size_y_in * ax_size_y_ratio / ax_height) /
+                                (fig_size_x_in * ax_size_x_ratio / ax_width)),
                 clip_on=False,
                 zorder=200,
                 color='r'
@@ -53,8 +56,8 @@ def tcbase(df, ax, dic_plot_para):
             patches.Ellipse(
                 (x, y),
                 dot_radius_x,
-                dot_radius_x / ((fig_size_y_inch / fig_size_x_inch) *
-                                (ax_size_y_ratio / ax_size_x_ratio) / (4 / ax_width)),
+                dot_radius_x / ((fig_size_y_in * ax_size_y_ratio / ax_height) /
+                                (fig_size_x_in * ax_size_x_ratio / ax_width)),
                 clip_on=False,
                 fill=False,
                 zorder=200,
@@ -63,13 +66,21 @@ def tcbase(df, ax, dic_plot_para):
         )
 
 
-def add_group_sep(df, ax, group_id, level, mode='line'):
-    sep = get_sep(df, group_id)
+def add_group_sep(df, ax, group_id, level, para, mode='line'):
+
+    ax_height = para['lim_y_max'] - para['lim_y_min']
+    sep, group = get_sep(df, group_id)
     if mode == 'line':
-        for s in sep:
-            codes = [Path.MOVETO, Path.LINETO]
-            vertices = [(s, (-0.72 - 0.2 * level) / (fig_size_y_inch * ax_size_y_ratio / 4)),
-                        (s, (-0.88 - 0.2 * level) / (fig_size_y_inch * ax_size_y_ratio / 4))]
+        for s0, s1, gr in zip(sep[1:], sep[:-1], group):
+            codes = [Path.MOVETO, Path.LINETO, Path.MOVETO, Path.LINETO]
+            y0 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
+                  level - igroup_indi_sep_y_in / 2)
+            y1 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
+                  (level + 1) + igroup_indi_sep_y_in / 2)
+            vertices = [(s0, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
+                        (s0, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
+                        (s1, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
+                        (s1, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height))]
             vertices = np.array(vertices, float)
             mypath = Path(vertices, codes)
             ax.add_patch(
@@ -80,35 +91,44 @@ def add_group_sep(df, ax, group_id, level, mode='line'):
                     linewidth=0.75,
                 )
             )
+            ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
+                    (fig_size_y_in * ax_size_y_ratio / ax_height), gr, horizontalalignment='center', verticalalignment='center')
     elif mode == 'box':
-        for s1, s2 in zip(sep[1:], sep[:-1]):
+        for s0, s1,gr in zip(sep[1:], sep[:-1],group):
             ax.add_patch(
                 patches.Rectangle(
-                    (s1, (-0.88 - 0.2 * level) /
-                     (fig_size_y_inch * ax_size_y_ratio / 4)),
-                    s2 - s1,
-                    0.16 / (fig_size_y_inch * ax_size_y_ratio / 4),
+                    (s0, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 1)) /
+                     (fig_size_y_in * ax_size_y_ratio / ax_height)),
+                    s1 - s0,
+                    igroup_indi_height_y_in /
+                    (fig_size_y_in * ax_size_y_ratio / ax_height),
                     fill=False,
                     clip_on=False,
                     zorder=200,
                     linewidth=0.75,
                 )
             )
+            ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
+                    (fig_size_y_in * ax_size_y_ratio / ax_height), gr, horizontalalignment='center', verticalalignment='center')
 
     return
 
 
 def get_sep(df, group_id):
+
     gn = df[group_id].tolist()
     current = gn[0]
     sep = [0]
+    group = []
     for idx, n in enumerate(gn[1:]):
         if current != n:
             sep.append(idx + 1)
+            group.append(current)
             current = n
 
     sep.append(idx + 2)
-    return sep
+    group.append(current)
+    return sep, group
 
 
 def readdata(fn):
@@ -123,36 +143,43 @@ def readdata(fn):
 
 def main(dic_arg):
 
+    # read data to dataframe
     df = readdata(dic_arg['input'][0])
 
+    # sort dataframe by group
     if (dic_arg['group']) != None:
         df.sort_values(by=dic_arg['group'], inplace=True)
-
     df['ORD'] = np.arange(0.5, len(df.id.tolist()) + 0.5)
 
+    # build dict for plot parameters
     dic_plot_para = dict()
 
-    dic_plot_para['xlim_min'] = 0
-    dic_plot_para['xlim_max'] = len(df.id.tolist())
-    dic_plot_para['ylim_min'] = 0
+    dic_plot_para['lim_x_min'] = 0
+    dic_plot_para['lim_x_max'] = len(df.id.tolist())
+    dic_plot_para['lim_y_min'] = 0
     if dic_arg['ymax'] != None:
-        dic_plot_para['ylim_max'] = dic_arg['ymax'][0]
+        dic_plot_para['lim_y_max'] = dic_arg['ymax'][0]
     else:
-        dic_plot_para['ylim_max'] = max(df.value)
+        dic_plot_para['lim_y_max'] = max(df.value)
 
+    # build figure
     plt.clf()
     plt.close()
 
-    fig = plt.figure(figsize=[fig_size_x_inch, fig_size_y_inch], dpi=fig_dpi)
+    fig = plt.figure(figsize=[fig_size_x_in, fig_size_y_in], dpi=fig_dpi)
     ax = fig.add_axes(
-        [ax_offset_x, ax_offset_y, ax_size_x_ratio, ax_size_y_ratio])
+        [ax_offset_x_ratio, ax_offset_y_ratio, ax_size_x_ratio, ax_size_y_ratio])
 
+    # plot base plot
     tcbase(df, ax, dic_plot_para)
 
+    # add grouping indicators
     if (dic_arg['group']) != None:
         for level, group_id in enumerate(dic_arg['group']):
-            add_group_sep(df, ax, group_id, level, mode='box')
+            add_group_sep(df, ax, group_id, level,
+                          mode=dic_arg['groupstyle'][0], para=dic_plot_para)
 
+    # save figure to file
     plt.savefig(dic_arg['output'][0])
 
 
@@ -163,16 +190,20 @@ if __name__ == '__main__':
 
     parser.add_argument('input', metavar='INPUT',
                         nargs=1, help="input excel or csv file")
+    parser.add_argument('-c', metavar='CONDITION',
+                        nargs=1, help="condition excel or csv file")
     parser.add_argument('-o', '--output', metavar='OUTPUT',
                         nargs=1, help="output file path")
-    parser.add_argument('-g', '--group', metavar='GROUPS',
-                        nargs='+', help="group by...")
     parser.add_argument('-x', metavar='X',
                         nargs=1, help="data x")
     parser.add_argument('-y', metavar='Y',
                         nargs=1, help="data y")
     parser.add_argument('--ymax', metavar='YMAX',
                         nargs=1, type=int, help="data y upper limit")
+    parser.add_argument('-g', '--group', metavar='GROUPS',
+                        nargs='+', help="grouping condition")
+    parser.add_argument('--groupstyle', metavar='STYLE', default='line', type=str,
+                        nargs=1, help="grouping style (line or box)")
 
     args = parser.parse_args()
 
