@@ -1,9 +1,15 @@
 import pandas as pd
 import numpy as np
+import os.path as op
+from tkinter import *
+from tkinter import filedialog as fd
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.path import Path
+
 import argparse
+
 
 ax_offset_x_ratio = 0.05
 ax_offset_y_ratio = 0.45
@@ -211,8 +217,9 @@ def main(para):
     tcbase(df, ax, dic_plot_para)
 
     # add spec line
-    for spec_name, spec_value in zip(para['spec'][::2], para['spec'][1::2]):
-        add_spec_line(df, ax, int(spec_value), spec_name, dic_plot_para)
+    if para['spec'] is not None:
+        for spec_name, spec_value in zip(para['spec'][::2], para['spec'][1::2]):
+            add_spec_line(df, ax, int(spec_value), spec_name, dic_plot_para)
 
     # add grouping indicators
     if (para['group']) != None:
@@ -229,7 +236,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Plot pivot charts from data')
 
-    parser.add_argument('input', metavar='INPUT',
+    parser.add_argument('-i', '--input', metavar='INPUT',
                         nargs=1, help="input excel or csv file")
     parser.add_argument('-c', metavar='CONDITION',
                         nargs=1, help="condition excel or csv file")
@@ -247,6 +254,66 @@ if __name__ == '__main__':
                         nargs=1, help="grouping style (line or box)")
     parser.add_argument('--spec', metavar='SPEC',
                         nargs='+', help="add spec indication")
+    parser.add_argument('--gui', action='store_true')
 
-    args = parser.parse_args()
-    main(vars(args))
+    args = vars(parser.parse_args())
+
+    if args['gui']:
+
+        root = Tk()
+
+        row0 = Frame(root)
+        row0.grid(row=0, column=0)
+        row1 = Frame(root)
+        row1.grid(row=1, column=0, sticky=W)
+
+        # row 0
+        def get_filename(x):
+            x.set(fd.askdirectory())
+            return
+
+        def run():
+            args['input'] = [op.join(wdn.get(), 'example.xlsx')]
+            args['output'] = [op.join(wdn.get(), 'output.png')]
+            if toGroup.get():
+                args['groupstyle'] = {0: ["box"], 1: ["line"]}[grouptype.get()]
+                args['group'] = ['t1', 't2']
+
+            main(args)
+            return
+
+        wdn = StringVar()
+        wd_button = Button(
+            row0, width=8, text="Folder", command=lambda: get_filename(wdn))
+        wd_button.grid(row=0, column=1)
+        wd_entry = Entry(row0, width=128, textvariable=wdn)
+        wd_entry.grid(row=0, column=2)
+
+        run_button = Button(
+            row0, width=8, text="Run", command=run)
+        run_button.grid(row=0, column=0)
+
+        # row 1
+        toGroup = BooleanVar()
+        wg_1_c1 = Checkbutton(row1, text="group", variable=toGroup)
+        wg_1_c1.grid(row=0, column=0)
+
+        grouptype = IntVar()
+        wg_1_r1 = Radiobutton(row1, text="box", variable=grouptype, value=0)
+        wg_1_r1.grid(row=0, column=1)
+        wg_1_r2 = Radiobutton(row1, text="line", variable=grouptype, value=1)
+        wg_1_r2.grid(row=0, column=2)
+
+        wg_1_group_type_0 = Entry(row1, width=16)
+        wg_1_group_type_1 = Entry(row1, width=16)
+        wg_1_group_type_2 = Entry(row1, width=16)
+
+        wg_1_group_type_0.grid(row=0, column=3)
+        wg_1_group_type_1.grid(row=0, column=4)
+        wg_1_group_type_2.grid(row=0, column=5)
+
+        mainloop()
+
+    else:
+
+        main(args)
