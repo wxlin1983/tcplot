@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os.path as op
+
 from tkinter import *
 from tkinter import filedialog as fd
 
@@ -32,12 +33,12 @@ igroup_indi_sep_y_in = 0.02
 fig_dpi = 300
 
 
-def tcbase(df, ax, para):
+def plot_data(df, ax, para):
 
     ax_height = para['ymax'] - para['ymin']
     ax_width = para['xmax'] - para['xmin']
 
-    ax.plot(df.ORD, df.value, 'k', linewidth=2.0, zorder=1)
+    ax.plot(df.ORD, df['scaled_value'], 'k', linewidth=2.0, zorder=1)
     plt.xticks(df.ORD, df[para['x']].tolist(), rotation=-90)
     ax.tick_params('x', labelsize=6)
     ax.tick_params('y', labelsize=12)
@@ -48,7 +49,7 @@ def tcbase(df, ax, para):
     dot_radius_x = (dot_radius_in / fig_size_y_in *
                     ax_size_y_ratio) * ax_width
 
-    for x, y in zip(df.ORD, df.value):
+    for x, y in zip(df.ORD, df['scaled_value']):
         ax.add_patch(
             patches.Ellipse(
                 (x, y),
@@ -166,19 +167,16 @@ def get_sep(df, group_id):
     return sep, group
 
 
-def readdata(para):
+def read_data(para):
 
-    fn = para['input']
-    try:
-        out = pd.read_excel(fn, sheet_name='Sheet1')
-    except:
-        out = pd.read_csv(fn)
+    out = pd.read_excel(para['input'], sheet_name='Sheet1')
 
     for fn_condi in para['condition']:
         out2 = pd.read_excel(fn_condi, sheet_name='Sheet1')
         out = pd.merge(out2, out, how='outer', on=para['x'])
 
     out.fillna('NA', inplace=True)
+    out['scaled_value'] = out[para['y']] * para['yscale']
 
     return out
 
@@ -203,21 +201,19 @@ def groupdata(df, para):
 def main(para):
 
     # read data to dataframe
-    df = readdata(para)
+    df = read_data(para)
 
-    # sort dataframe by group
-    groupdata(df, para)
-
-    # build dict for plot parameters
-    dic_plot_para = dict()
-
+    # set plot parameters
     para['xmin'] = 0
     para['xmax'] = len(df[para['x']].tolist())
     para['ymin'] = 0
     if para['ymax'] != None:
         para['ymax'] = para['ymax']
     else:
-        para['ymax'] = max(df.value)
+        para['ymax'] = max(df['scaled_value'])
+
+    # sort dataframe by group
+    groupdata(df, para)
 
     # build figure
     plt.clf()
@@ -228,18 +224,18 @@ def main(para):
         [ax_offset_x_ratio, ax_offset_y_ratio, ax_size_x_ratio, ax_size_y_ratio])
 
     # plot base plot
-    tcbase(df, ax, para)
+    plot_data(df, ax, para)
 
     # add spec line
     if para['spec'] is not None:
         for spec_name, spec_value in zip(para['spec'][::2], para['spec'][1::2]):
-            add_spec_line(df, ax, int(spec_value), spec_name, dic_plot_para)
+            add_spec_line(df, ax, int(spec_value), spec_name, para)
 
     # add grouping indicators
     if (para['group']) is not None:
         for level, group_id in enumerate(para['group']):
             add_group_sep(df, ax, group_id, len(para['group']) - level - 1,
-                          mode=para['groupstyle'][0], para=para)
+                          mode=para['groupstyle'], para=para)
 
     # save figure to file
     plt.savefig(para['output'])
@@ -260,10 +256,10 @@ if __name__ == '__main__':
                         nargs=1, help="data x")
     parser.add_argument('-y', metavar='Y', default=[y_DEFAULT],
                         nargs=1, help="data y")
-    parser.add_argument('--yscale', metavar='YSCALE',
+    parser.add_argument('--yscale', metavar='YSCALE', default=[1.0],
                         nargs=1, type=float, help="scaling factor for y")
     parser.add_argument('--ymax', metavar='YMAX',
-                        nargs=1, type=int, help="data y upper limit")
+                        nargs=1, type=float, help="data y upper limit")
     parser.add_argument('-g', '--group', metavar='GROUPS',
                         nargs='+', help="grouping condition")
     parser.add_argument('--groupstyle', metavar='STYLE', default=['box'], type=str,
@@ -276,16 +272,13 @@ if __name__ == '__main__':
 
     args['x'] = args['x'][0]
     args['y'] = args['y'][0]
+    args['yscale'] = args['yscale'][0]
     args['input'] = args['input'][0]
     args['output'] = args['output'][0]
+    args['groupstyle'] = args['groupstyle'][0]
 
     if args['ymax'] is not None:
         args['ymax'] = args['ymax'][0]
-
-    if args['yscale'] is not None:
-        args['yscale'] = args['yscale'][0]
-
-    print(args)
 
     if args['gui']:
 
@@ -313,19 +306,19 @@ if __name__ == '__main__':
                 args['input'] = op.join(wdn.get(), input_DEFAULT)
                 if args['output'] is None:
                     args['output'] = op.join(wdn.get(), output_DEFAULT)
-                if toGroup.get():
-                    args['groupstyle'] = {0: ["box"],
-                                          1: ["line"]}[grouptype.get()]
-                    args['group'] = [group_type_0.get(), group_type_1.get(),
-                                     group_type_2.get()]
-                if toSPEC.get():
+                if group_enable.get():
+                    args['groupstyle'] = {0: "box",
+                                          1: "line"}[group_style.get()]
+                    args['group'] = [group_type0.get(), group_type1.get(),
+                                     group_type2.get()]
+                if spec_enable.get():
                     args['spec'] = []
-                    if (spec_name_0.get() != '') and (spec_value_0.get() != ''):
-                        args['spec'].append(spec_name_0.get())
-                        args['spec'].append(spec_value_0.get())
-                    if (spec_name_1.get() != '') and (spec_value_1.get() != ''):
-                        args['spec'].append(spec_name_1.get())
-                        args['spec'].append(spec_value_1.get())
+                    if (spec_name0.get() != '') and (spec_value0.get() != ''):
+                        args['spec'].append(spec_name0.get())
+                        args['spec'].append(spec_value0.get())
+                    if (spec_name1.get() != '') and (spec_value1.get() != ''):
+                        args['spec'].append(spec_name1.get())
+                        args['spec'].append(spec_value1.get())
 
                 main(args)
             return
@@ -354,56 +347,59 @@ if __name__ == '__main__':
         wg_0_ymax.grid(row=0, column=5)
 
         # row 2
-        toGroup = BooleanVar()
-        grouptype = IntVar()
+        group_enable = BooleanVar()
+        group_style = IntVar()
 
-        wg_1_c1 = Checkbutton(row2, text="enable", variable=toGroup)
-        wg_1_r1 = Radiobutton(row2, text="box", variable=grouptype, value=0)
-        wg_1_r2 = Radiobutton(row2, text="line", variable=grouptype, value=1)
+        group_cb = Checkbutton(row2, text="enable", variable=group_enable)
+        group_rb0 = Radiobutton(
+            row2, text="box", variable=group_style, value=0)
+        group_rb1 = Radiobutton(
+            row2, text="line", variable=group_style, value=1)
 
-        wg_1_c1.grid(row=0, column=0)
-        wg_1_r1.grid(row=0, column=1)
-        wg_1_r2.grid(row=0, column=2)
+        group_cb.grid(row=0, column=0)
+        group_rb0.grid(row=0, column=1)
+        group_rb1.grid(row=0, column=2)
 
-        group_type_0 = StringVar()
-        group_type_1 = StringVar()
-        group_type_2 = StringVar()
+        group_type0 = StringVar()
+        group_type1 = StringVar()
+        group_type2 = StringVar()
 
-        wg_1_group_type_0 = Entry(row2, width=8, textvariable=group_type_0)
-        wg_1_group_type_1 = Entry(row2, width=8, textvariable=group_type_1)
-        wg_1_group_type_2 = Entry(row2, width=8, textvariable=group_type_2)
+        group_et0 = Entry(row2, width=8, textvariable=group_type0)
+        group_et1 = Entry(row2, width=8, textvariable=group_type1)
+        group_et2 = Entry(row2, width=8, textvariable=group_type2)
 
         Label(row2, text='group 1').grid(row=0, column=3)
-        wg_1_group_type_0.grid(row=0, column=4)
+        group_et0.grid(row=0, column=4)
         Label(row2, text='group 2').grid(row=0, column=5)
-        wg_1_group_type_1.grid(row=0, column=6)
+        group_et1.grid(row=0, column=6)
         Label(row2, text='group 3').grid(row=0, column=7)
-        wg_1_group_type_2.grid(row=0, column=8)
+        group_et2.grid(row=0, column=8)
 
         # row 3
-        toSPEC = BooleanVar()
+        spec_enable = BooleanVar()
 
-        wg_2_c1 = Checkbutton(row3, text="enable", variable=toSPEC)
+        spec_cb = Checkbutton(row3, text="enable", variable=spec_enable)
 
-        wg_2_c1.grid(row=0, column=0)
+        spec_cb.grid(row=0, column=0)
 
-        spec_name_0 = StringVar()
-        spec_value_0 = StringVar()
-        spec_name_1 = StringVar()
-        spec_value_1 = StringVar()
+        spec_name0 = StringVar()
+        spec_value0 = StringVar()
+        spec_name1 = StringVar()
+        spec_value1 = StringVar()
 
-        wg_2_spec_name_0 = Entry(row3, width=8, textvariable=spec_name_0)
-        wg_2_spec_value_0 = Entry(row3, width=16, textvariable=spec_value_0)
-        wg_2_spec_name_1 = Entry(row3, width=8, textvariable=spec_name_1)
-        wg_2_spec_value_1 = Entry(row3, width=16, textvariable=spec_value_1)
+        spec_et0 = Entry(row3, width=8, textvariable=spec_name0)
+        spec_et1 = Entry(row3, width=16, textvariable=spec_value0)
+        spec_et2 = Entry(row3, width=8, textvariable=spec_name1)
+        spec_et3 = Entry(row3, width=16, textvariable=spec_value1)
 
         Label(row3, text='spec 1').grid(row=0, column=1)
-        wg_2_spec_name_0.grid(row=0, column=2)
-        wg_2_spec_value_0.grid(row=0, column=3)
+        spec_et0.grid(row=0, column=2)
+        spec_et1.grid(row=0, column=3)
         Label(row3, text='spec 2').grid(row=0, column=4)
-        wg_2_spec_name_1.grid(row=0, column=5)
-        wg_2_spec_value_1.grid(row=0, column=6)
+        spec_et2.grid(row=0, column=5)
+        spec_et3.grid(row=0, column=6)
 
+        # start gui
         mainloop()
 
     else:
