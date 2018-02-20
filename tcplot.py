@@ -13,6 +13,7 @@ import argparse
 
 input_DEFAULT = 'data.xlsx'
 output_DEFAULT = 'output.png'
+t_DEFAULT = 'time'
 x_DEFAULT = 'id'
 y_DEFAULT = 'value'
 yscale_DEFAULT = 1
@@ -169,10 +170,10 @@ def get_sep(df, group_id):
 
 def read_data(para):
 
-    out = pd.read_excel(para['input'], sheet_name='Sheet1')
+    out = pd.read_excel(para['input'], sheet_name=0)
 
     for fn_condi in para['condition']:
-        out2 = pd.read_excel(fn_condi, sheet_name='Sheet1')
+        out2 = pd.read_excel(fn_condi, sheet_name=0)
         out = pd.merge(out2, out, how='outer', on=para['x'])
 
     out.fillna('NA', inplace=True)
@@ -181,7 +182,7 @@ def read_data(para):
     return out
 
 
-def groupdata(df, para):
+def group_data(df, para):
 
     if (para['group']) != None:
         allgroup = []
@@ -189,10 +190,16 @@ def groupdata(df, para):
             if x in df.columns:
                 allgroup.append(x)
         if len(allgroup) == 0:
+            if para['t'] in df.columns:
+                df.sort_values(by=para['t'], inplace=True)
             para['group'] = None
         else:
+            if para['t'] in df.columns:
+                df.sort_values(by=allgroup + [para['t']], inplace=True)
+            else:
+                df.sort_values(by=allgroup, inplace=True)
             para['group'] = allgroup
-            df.sort_values(by=para['group'], inplace=True)
+
     df['ORD'] = np.arange(0.5, len(df[para['x']].tolist()) + 0.5)
 
     return
@@ -213,7 +220,7 @@ def main(para):
         para['ymax'] = max(df['scaled_value'])
 
     # sort dataframe by group
-    groupdata(df, para)
+    group_data(df, para)
 
     # build figure
     plt.clf()
@@ -260,6 +267,8 @@ if __name__ == '__main__':
                         nargs=1, type=float, help="scaling factor for y")
     parser.add_argument('--ymax', metavar='YMAX',
                         nargs=1, type=float, help="data y upper limit")
+    parser.add_argument('-t', metavar='TIME', default=[t_DEFAULT],
+                        nargs=1, help="data time")
     parser.add_argument('-g', '--group', metavar='GROUPS',
                         nargs='+', help="grouping condition")
     parser.add_argument('--groupstyle', metavar='STYLE', default=['box'], type=str,
@@ -272,6 +281,7 @@ if __name__ == '__main__':
 
     args['x'] = args['x'][0]
     args['y'] = args['y'][0]
+    args['t'] = args['t'][0]
     args['yscale'] = args['yscale'][0]
     args['input'] = args['input'][0]
     args['output'] = args['output'][0]
@@ -282,6 +292,7 @@ if __name__ == '__main__':
 
     if args['gui']:
 
+        # main containers
         root = Tk()
         root.resizable(width=False, height=False)
 
@@ -291,21 +302,46 @@ if __name__ == '__main__':
         row0.grid(row=0, column=0, sticky=W)
         row1 = LabelFrame(frame, text="data", padx=4, pady=4)
         row1.grid(row=1, column=0, sticky=W)
-        row2 = LabelFrame(frame, text="grouping", padx=4, pady=4)
+        row2 = LabelFrame(frame, text="time", padx=4, pady=4)
         row2.grid(row=2, column=0, sticky=W)
-        row3 = LabelFrame(frame, text="spec", padx=4, pady=4)
+        row3 = LabelFrame(frame, text="grouping", padx=4, pady=4)
         row3.grid(row=3, column=0, sticky=W)
+        row4 = LabelFrame(frame, text="spec", padx=4, pady=4)
+        row4.grid(row=4, column=0, sticky=W)
 
-        # row 0
+        to_save = []
+
+        # helper functions
         def get_wd():
-            wdn.set(fd.askdirectory())
+            tmp = fd.askdirectory()
+            if tmp != '':
+                input_dirname.set(tmp)
             return
 
         def run():
-            if wdn.get() != '':
-                args['input'] = op.join(wdn.get(), input_DEFAULT)
+            if input_dirname.get() != '':
+                args['input'] = op.join(input_dirname.get(), input_DEFAULT)
                 if args['output'] is None:
-                    args['output'] = op.join(wdn.get(), output_DEFAULT)
+                    args['output'] = op.join(
+                        input_dirname.get(), output_DEFAULT)
+                if data_x.get() != '':
+                    args['x'] = data_x.get()
+                if data_y.get() != '':
+                    args['y'] = data_y.get()
+                if data_yscale.get() != '':
+                    try:
+                        tmp = float(data_yscale.get())
+                        args['yscale'] = tmp
+                    except:
+                        pass
+                if data_ymax.get() != '':
+                    try:
+                        tmp = float(data_ymax.get())
+                        args['ymax'] = tmp
+                    except:
+                        pass
+                if time_t.get() != '':
+                    args['t'] = time_t.get()
                 if group_enable.get():
                     args['groupstyle'] = {0: "box",
                                           1: "line"}[group_style.get()]
@@ -323,79 +359,153 @@ if __name__ == '__main__':
                 main(args)
             return
 
-        wdn = StringVar()
-        wd_button = Button(
-            row0, width=8, text="folder", command=get_wd)
-        wd_button.grid(row=0, column=1)
-        wd_entry = Entry(row0, width=58, textvariable=wdn)
-        wd_entry.grid(row=0, column=2)
+        def load_config():
+            if input_dirname.get() == '':
+                return
+            try:
+                tmp = pd.read_excel(
+                    op.join(input_dirname.get(), 'config.xlsx'), sheet_name='Sheet1')
+                tmp.fillna('', inplace=True)
+            except:
+                return
+            for vpair in tmp[['vname', 'vvalue', 'vtype']].values.tolist():
+                vname = str(vpair[0])
+                vvalue = str(vpair[1])
+                vtype = str(vpair[2])
+                try:
+                    if vtype == 'String':
+                        expr = vname + '.set(\'' + vvalue + '\')'
+                    else:
+                        expr = vname + '.set(' + vvalue + ')'
+                    exec(expr)
+                    print('exec \'{:}\''.format(expr))
+                except:
+                    print('fail to exec \'{:}\''.format(expr))
+                    pass
+            return
 
-        run_button = Button(
-            row0, width=8, text="run", command=run)
-        run_button.grid(row=0, column=0)
+        def save_config():
+            if input_dirname.get() == '':
+                return
+            vname = []
+            vvalue = []
+            vtype = []
+            for vpair in to_save:  # name, type
+                vname.append(vpair[0])
+                vtype.append(vpair[1])
+                vvalue.append(str(eval(vpair[0] + '.get()')))
+            tmpdf = pd.DataFrame(
+                {'vname': vname, 'vvalue': vvalue, 'vtype': vtype})
+            tmpdf.to_excel(
+                op.join(input_dirname.get(), 'config.xlsx'), sheet_name='Sheet1', index=False)
+            return
+
+        # row 0
+        input_dirname = StringVar()
+
+        input_b0 = Button(row0, width=4, text="run", command=run)
+        input_b1 = Button(row0, width=6, text="folder", command=get_wd)
+        input_b2 = Button(row0, width=10, text="load config",
+                          command=load_config)
+        input_b3 = Button(row0, width=10, text="save config",
+                          command=save_config)
+        input_et0 = Entry(row0, width=58, textvariable=input_dirname)
+
+        input_b0.grid(row=0, column=0)
+        input_et0.grid(row=0, column=1)
+        input_b1.grid(row=0, column=2)
+        input_b2.grid(row=0, column=3)
+        input_b3.grid(row=0, column=4)
 
         # row 1
-        wg_0_x = Entry(row1, width=8)
-        wg_0_y = Entry(row1, width=8)
-        wg_0_ymax = Entry(row1, width=8)
+        data_x = StringVar()
+        data_y = StringVar()
+        data_yscale = StringVar()
+        data_ymax = StringVar()
+
+        to_save.append(['data_x', 'String'])
+        to_save.append(['data_y', 'String'])
+        to_save.append(['data_yscale', 'String'])
+        to_save.append(['data_ymax', 'String'])
+
+        data_et0 = Entry(row1, width=8, textvariable=data_x)
+        data_et1 = Entry(row1, width=8, textvariable=data_y)
+        data_et2 = Entry(row1, width=8, textvariable=data_yscale)
+        data_et3 = Entry(row1, width=8, textvariable=data_ymax)
 
         Label(row1, text='x').grid(row=0, column=0)
-        wg_0_x.grid(row=0, column=1)
+        data_et0.grid(row=0, column=1)
         Label(row1, text='y').grid(row=0, column=2)
-        wg_0_y.grid(row=0, column=3)
-        Label(row1, text='ymax').grid(row=0, column=4)
-        wg_0_ymax.grid(row=0, column=5)
+        data_et1.grid(row=0, column=3)
+        Label(row1, text='yscale').grid(row=0, column=4)
+        data_et2.grid(row=0, column=5)
+        Label(row1, text='ymax').grid(row=0, column=6)
+        data_et3.grid(row=0, column=7)
 
         # row 2
+        time_t = StringVar()
+        to_save.append(['time_t', 'String'])
+
+        time_et0 = Entry(row2, width=8, textvariable=time_t)
+        Label(row2, text='t').grid(row=0, column=0)
+        time_et0.grid(row=0, column=1)
+
+        # row 3
         group_enable = BooleanVar()
         group_style = IntVar()
-
-        group_cb = Checkbutton(row2, text="enable", variable=group_enable)
-        group_rb0 = Radiobutton(
-            row2, text="box", variable=group_style, value=0)
-        group_rb1 = Radiobutton(
-            row2, text="line", variable=group_style, value=1)
-
-        group_cb.grid(row=0, column=0)
-        group_rb0.grid(row=0, column=1)
-        group_rb1.grid(row=0, column=2)
-
         group_type0 = StringVar()
         group_type1 = StringVar()
         group_type2 = StringVar()
 
-        group_et0 = Entry(row2, width=8, textvariable=group_type0)
-        group_et1 = Entry(row2, width=8, textvariable=group_type1)
-        group_et2 = Entry(row2, width=8, textvariable=group_type2)
+        to_save.append(['group_enable', 'Boolean'])
+        to_save.append(['group_style', 'Int'])
+        to_save.append(['group_type0', 'String'])
+        to_save.append(['group_type1', 'String'])
+        to_save.append(['group_type2', 'String'])
 
-        Label(row2, text='group 1').grid(row=0, column=3)
+        group_cb = Checkbutton(row3, text="enable", variable=group_enable)
+        group_rb0 = Radiobutton(
+            row3, text="box", variable=group_style, value=0)
+        group_rb1 = Radiobutton(
+            row3, text="line", variable=group_style, value=1)
+        group_et0 = Entry(row3, width=8, textvariable=group_type0)
+        group_et1 = Entry(row3, width=8, textvariable=group_type1)
+        group_et2 = Entry(row3, width=8, textvariable=group_type2)
+
+        group_cb.grid(row=0, column=0)
+        group_rb0.grid(row=0, column=1)
+        group_rb1.grid(row=0, column=2)
+        Label(row3, text='group 1').grid(row=0, column=3)
         group_et0.grid(row=0, column=4)
-        Label(row2, text='group 2').grid(row=0, column=5)
+        Label(row3, text='group 2').grid(row=0, column=5)
         group_et1.grid(row=0, column=6)
-        Label(row2, text='group 3').grid(row=0, column=7)
+        Label(row3, text='group 3').grid(row=0, column=7)
         group_et2.grid(row=0, column=8)
 
-        # row 3
+        # row 4
         spec_enable = BooleanVar()
-
-        spec_cb = Checkbutton(row3, text="enable", variable=spec_enable)
-
-        spec_cb.grid(row=0, column=0)
-
         spec_name0 = StringVar()
         spec_value0 = StringVar()
         spec_name1 = StringVar()
         spec_value1 = StringVar()
 
-        spec_et0 = Entry(row3, width=8, textvariable=spec_name0)
-        spec_et1 = Entry(row3, width=16, textvariable=spec_value0)
-        spec_et2 = Entry(row3, width=8, textvariable=spec_name1)
-        spec_et3 = Entry(row3, width=16, textvariable=spec_value1)
+        to_save.append(['spec_enable', 'Boolean'])
+        to_save.append(['spec_name0', 'String'])
+        to_save.append(['spec_value0', 'String'])
+        to_save.append(['spec_name1', 'String'])
+        to_save.append(['spec_value1', 'String'])
 
-        Label(row3, text='spec 1').grid(row=0, column=1)
+        spec_cb = Checkbutton(row4, text="enable", variable=spec_enable)
+        spec_et0 = Entry(row4, width=8, textvariable=spec_name0)
+        spec_et1 = Entry(row4, width=16, textvariable=spec_value0)
+        spec_et2 = Entry(row4, width=8, textvariable=spec_name1)
+        spec_et3 = Entry(row4, width=16, textvariable=spec_value1)
+
+        spec_cb.grid(row=0, column=0)
+        Label(row4, text='spec 1').grid(row=0, column=1)
         spec_et0.grid(row=0, column=2)
         spec_et1.grid(row=0, column=3)
-        Label(row3, text='spec 2').grid(row=0, column=4)
+        Label(row4, text='spec 2').grid(row=0, column=4)
         spec_et2.grid(row=0, column=5)
         spec_et3.grid(row=0, column=6)
 
