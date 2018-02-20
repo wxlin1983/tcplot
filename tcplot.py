@@ -10,6 +10,11 @@ from matplotlib.path import Path
 
 import argparse
 
+input_DEFAULT = 'data.xlsx'
+output_DEFAULT = 'output.png'
+x_DEFAULT = 'id'
+y_DEFAULT = 'value'
+yscale_DEFAULT = 1
 
 ax_offset_x_ratio = 0.05
 ax_offset_y_ratio = 0.45
@@ -29,21 +34,16 @@ fig_dpi = 300
 
 def tcbase(df, ax, para):
 
-    lim_x_min = para['lim_x_min']
-    lim_x_max = para['lim_x_max']
-    lim_y_min = para['lim_y_min']
-    lim_y_max = para['lim_y_max']
-
-    ax_height = para['lim_y_max'] - para['lim_y_min']
-    ax_width = para['lim_x_max'] - para['lim_x_min']
+    ax_height = para['ymax'] - para['ymin']
+    ax_width = para['xmax'] - para['xmin']
 
     ax.plot(df.ORD, df.value, 'k', linewidth=2.0, zorder=1)
-    plt.xticks(df.ORD, df.id.tolist(), rotation=-90)
+    plt.xticks(df.ORD, df[para['x']].tolist(), rotation=-90)
     ax.tick_params('x', labelsize=6)
     ax.tick_params('y', labelsize=12)
 
-    ax.set_xlim([lim_x_min, lim_x_max])
-    ax.set_ylim([lim_y_min, lim_y_max])
+    ax.set_xlim([para['xmin'], para['xmax']])
+    ax.set_ylim([para['ymin'], para['ymax']])
 
     dot_radius_x = (dot_radius_in / fig_size_y_in *
                     ax_size_y_ratio) * ax_width
@@ -76,7 +76,7 @@ def tcbase(df, ax, para):
 
 def add_group_sep(df, ax, group_id, level, para, mode='line'):
 
-    ax_height = para['lim_y_max'] - para['lim_y_min']
+    ax_height = para['ymax'] - para['ymin']
     sep, group = get_sep(df, group_id)
     if mode == 'line':
         for s0, s1, gr in zip(sep[1:], sep[:-1], group):
@@ -143,7 +143,7 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
 
 
 def add_spec_line(df, ax, spec, label, para, col='r'):
-    ax.plot([para['lim_x_min'], para['lim_x_max']],
+    ax.plot([para['xmin'], para['xmax']],
             [spec, spec], '--', linewidth=1.0, zorder=1, color=col)
     ax.text(0, spec, label, ha='left', va='bottom', color=col)
     return
@@ -168,11 +168,17 @@ def get_sep(df, group_id):
 
 def readdata(para):
 
-    fn = para['input'][0]
+    fn = para['input']
     try:
         out = pd.read_excel(fn, sheet_name='Sheet1')
     except:
         out = pd.read_csv(fn)
+
+    for fn_condi in para['condition']:
+        out2 = pd.read_excel(fn_condi, sheet_name='Sheet1')
+        out = pd.merge(out2, out, how='outer', on=para['x'])
+
+    out.fillna('NA', inplace=True)
 
     return out
 
@@ -180,8 +186,16 @@ def readdata(para):
 def groupdata(df, para):
 
     if (para['group']) != None:
-        df.sort_values(by=para['group'], inplace=True)
-    df['ORD'] = np.arange(0.5, len(df.id.tolist()) + 0.5)
+        allgroup = []
+        for x in para['group']:
+            if x in df.columns:
+                allgroup.append(x)
+        if len(allgroup) == 0:
+            para['group'] = None
+        else:
+            para['group'] = allgroup
+            df.sort_values(by=para['group'], inplace=True)
+    df['ORD'] = np.arange(0.5, len(df[para['x']].tolist()) + 0.5)
 
     return
 
@@ -197,13 +211,13 @@ def main(para):
     # build dict for plot parameters
     dic_plot_para = dict()
 
-    dic_plot_para['lim_x_min'] = 0
-    dic_plot_para['lim_x_max'] = len(df.id.tolist())
-    dic_plot_para['lim_y_min'] = 0
+    para['xmin'] = 0
+    para['xmax'] = len(df[para['x']].tolist())
+    para['ymin'] = 0
     if para['ymax'] != None:
-        dic_plot_para['lim_y_max'] = para['ymax'][0]
+        para['ymax'] = para['ymax']
     else:
-        dic_plot_para['lim_y_max'] = max(df.value)
+        para['ymax'] = max(df.value)
 
     # build figure
     plt.clf()
@@ -214,7 +228,7 @@ def main(para):
         [ax_offset_x_ratio, ax_offset_y_ratio, ax_size_x_ratio, ax_size_y_ratio])
 
     # plot base plot
-    tcbase(df, ax, dic_plot_para)
+    tcbase(df, ax, para)
 
     # add spec line
     if para['spec'] is not None:
@@ -222,13 +236,13 @@ def main(para):
             add_spec_line(df, ax, int(spec_value), spec_name, dic_plot_para)
 
     # add grouping indicators
-    if (para['group']) != None:
+    if (para['group']) is not None:
         for level, group_id in enumerate(para['group']):
             add_group_sep(df, ax, group_id, len(para['group']) - level - 1,
-                          mode=para['groupstyle'][0], para=dic_plot_para)
+                          mode=para['groupstyle'][0], para=para)
 
     # save figure to file
-    plt.savefig(para['output'][0])
+    plt.savefig(para['output'])
 
 
 if __name__ == '__main__':
@@ -236,16 +250,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Plot pivot charts from data')
 
-    parser.add_argument('-i', '--input', metavar='INPUT',
+    parser.add_argument('-i', '--input', metavar='INPUT', default=[input_DEFAULT],
                         nargs=1, help="input excel or csv file")
-    parser.add_argument('-c', metavar='CONDITION',
-                        nargs=1, help="condition excel or csv file")
-    parser.add_argument('-o', '--output', metavar='OUTPUT',
+    parser.add_argument('-c', '--condition', metavar='CONDITION', default=[],
+                        nargs='+', help="condition excel or csv file")
+    parser.add_argument('-o', '--output', metavar='OUTPUT', default=[output_DEFAULT],
                         nargs=1, help="output file path")
-    parser.add_argument('-x', metavar='X',
+    parser.add_argument('-x', metavar='X', default=[x_DEFAULT],
                         nargs=1, help="data x")
-    parser.add_argument('-y', metavar='Y',
+    parser.add_argument('-y', metavar='Y', default=[y_DEFAULT],
                         nargs=1, help="data y")
+    parser.add_argument('--yscale', metavar='YSCALE',
+                        nargs=1, type=float, help="scaling factor for y")
     parser.add_argument('--ymax', metavar='YMAX',
                         nargs=1, type=int, help="data y upper limit")
     parser.add_argument('-g', '--group', metavar='GROUPS',
@@ -258,59 +274,135 @@ if __name__ == '__main__':
 
     args = vars(parser.parse_args())
 
+    args['x'] = args['x'][0]
+    args['y'] = args['y'][0]
+    args['input'] = args['input'][0]
+    args['output'] = args['output'][0]
+
+    if args['ymax'] is not None:
+        args['ymax'] = args['ymax'][0]
+
+    if args['yscale'] is not None:
+        args['yscale'] = args['yscale'][0]
+
+    print(args)
+
     if args['gui']:
 
         root = Tk()
+        root.resizable(width=False, height=False)
 
-        row0 = Frame(root)
-        row0.grid(row=0, column=0)
-        row1 = Frame(root)
+        frame = Frame(root, padx=4, pady=4)
+        frame.grid(row=0, column=0)
+        row0 = LabelFrame(frame, text="input", padx=4, pady=4)
+        row0.grid(row=0, column=0, sticky=W)
+        row1 = LabelFrame(frame, text="data", padx=4, pady=4)
         row1.grid(row=1, column=0, sticky=W)
+        row2 = LabelFrame(frame, text="grouping", padx=4, pady=4)
+        row2.grid(row=2, column=0, sticky=W)
+        row3 = LabelFrame(frame, text="spec", padx=4, pady=4)
+        row3.grid(row=3, column=0, sticky=W)
 
         # row 0
-        def get_filename(x):
-            x.set(fd.askdirectory())
+        def get_wd():
+            wdn.set(fd.askdirectory())
             return
 
         def run():
-            args['input'] = [op.join(wdn.get(), 'example.xlsx')]
-            args['output'] = [op.join(wdn.get(), 'output.png')]
-            if toGroup.get():
-                args['groupstyle'] = {0: ["box"], 1: ["line"]}[grouptype.get()]
-                args['group'] = ['t1', 't2']
+            if wdn.get() != '':
+                args['input'] = op.join(wdn.get(), input_DEFAULT)
+                if args['output'] is None:
+                    args['output'] = op.join(wdn.get(), output_DEFAULT)
+                if toGroup.get():
+                    args['groupstyle'] = {0: ["box"],
+                                          1: ["line"]}[grouptype.get()]
+                    args['group'] = [group_type_0.get(), group_type_1.get(),
+                                     group_type_2.get()]
+                if toSPEC.get():
+                    args['spec'] = []
+                    if (spec_name_0.get() != '') and (spec_value_0.get() != ''):
+                        args['spec'].append(spec_name_0.get())
+                        args['spec'].append(spec_value_0.get())
+                    if (spec_name_1.get() != '') and (spec_value_1.get() != ''):
+                        args['spec'].append(spec_name_1.get())
+                        args['spec'].append(spec_value_1.get())
 
-            main(args)
+                main(args)
             return
 
         wdn = StringVar()
         wd_button = Button(
-            row0, width=8, text="Folder", command=lambda: get_filename(wdn))
+            row0, width=8, text="folder", command=get_wd)
         wd_button.grid(row=0, column=1)
-        wd_entry = Entry(row0, width=128, textvariable=wdn)
+        wd_entry = Entry(row0, width=58, textvariable=wdn)
         wd_entry.grid(row=0, column=2)
 
         run_button = Button(
-            row0, width=8, text="Run", command=run)
+            row0, width=8, text="run", command=run)
         run_button.grid(row=0, column=0)
 
         # row 1
-        toGroup = BooleanVar()
-        wg_1_c1 = Checkbutton(row1, text="group", variable=toGroup)
-        wg_1_c1.grid(row=0, column=0)
+        wg_0_x = Entry(row1, width=8)
+        wg_0_y = Entry(row1, width=8)
+        wg_0_ymax = Entry(row1, width=8)
 
+        Label(row1, text='x').grid(row=0, column=0)
+        wg_0_x.grid(row=0, column=1)
+        Label(row1, text='y').grid(row=0, column=2)
+        wg_0_y.grid(row=0, column=3)
+        Label(row1, text='ymax').grid(row=0, column=4)
+        wg_0_ymax.grid(row=0, column=5)
+
+        # row 2
+        toGroup = BooleanVar()
         grouptype = IntVar()
-        wg_1_r1 = Radiobutton(row1, text="box", variable=grouptype, value=0)
+
+        wg_1_c1 = Checkbutton(row2, text="enable", variable=toGroup)
+        wg_1_r1 = Radiobutton(row2, text="box", variable=grouptype, value=0)
+        wg_1_r2 = Radiobutton(row2, text="line", variable=grouptype, value=1)
+
+        wg_1_c1.grid(row=0, column=0)
         wg_1_r1.grid(row=0, column=1)
-        wg_1_r2 = Radiobutton(row1, text="line", variable=grouptype, value=1)
         wg_1_r2.grid(row=0, column=2)
 
-        wg_1_group_type_0 = Entry(row1, width=16)
-        wg_1_group_type_1 = Entry(row1, width=16)
-        wg_1_group_type_2 = Entry(row1, width=16)
+        group_type_0 = StringVar()
+        group_type_1 = StringVar()
+        group_type_2 = StringVar()
 
-        wg_1_group_type_0.grid(row=0, column=3)
-        wg_1_group_type_1.grid(row=0, column=4)
-        wg_1_group_type_2.grid(row=0, column=5)
+        wg_1_group_type_0 = Entry(row2, width=8, textvariable=group_type_0)
+        wg_1_group_type_1 = Entry(row2, width=8, textvariable=group_type_1)
+        wg_1_group_type_2 = Entry(row2, width=8, textvariable=group_type_2)
+
+        Label(row2, text='group 1').grid(row=0, column=3)
+        wg_1_group_type_0.grid(row=0, column=4)
+        Label(row2, text='group 2').grid(row=0, column=5)
+        wg_1_group_type_1.grid(row=0, column=6)
+        Label(row2, text='group 3').grid(row=0, column=7)
+        wg_1_group_type_2.grid(row=0, column=8)
+
+        # row 3
+        toSPEC = BooleanVar()
+
+        wg_2_c1 = Checkbutton(row3, text="enable", variable=toSPEC)
+
+        wg_2_c1.grid(row=0, column=0)
+
+        spec_name_0 = StringVar()
+        spec_value_0 = StringVar()
+        spec_name_1 = StringVar()
+        spec_value_1 = StringVar()
+
+        wg_2_spec_name_0 = Entry(row3, width=8, textvariable=spec_name_0)
+        wg_2_spec_value_0 = Entry(row3, width=16, textvariable=spec_value_0)
+        wg_2_spec_name_1 = Entry(row3, width=8, textvariable=spec_name_1)
+        wg_2_spec_value_1 = Entry(row3, width=16, textvariable=spec_value_1)
+
+        Label(row3, text='spec 1').grid(row=0, column=1)
+        wg_2_spec_name_0.grid(row=0, column=2)
+        wg_2_spec_value_0.grid(row=0, column=3)
+        Label(row3, text='spec 2').grid(row=0, column=4)
+        wg_2_spec_name_1.grid(row=0, column=5)
+        wg_2_spec_value_1.grid(row=0, column=6)
 
         mainloop()
 
