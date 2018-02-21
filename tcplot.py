@@ -40,7 +40,7 @@ def plot_data(df, ax, para):
     ax_width = para['xmax'] - para['xmin']
 
     ax.plot(df.ORD, df['scaled_value'], 'k', linewidth=2.0, zorder=1)
-    plt.xticks(df.ORD, df[para['x']].tolist(), rotation=-90)
+    plt.xticks(df.ORD, df[para['x']].tolist(), rotation=90)
     ax.tick_params('x', labelsize=6)
     ax.tick_params('y', labelsize=12)
 
@@ -257,7 +257,7 @@ if __name__ == '__main__':
                         nargs=1, help="input excel or csv file")
     parser.add_argument('-c', '--condition', metavar='CONDITION', default=[],
                         nargs='+', help="condition excel or csv file")
-    parser.add_argument('-o', '--output', metavar='OUTPUT', default=[output_DEFAULT],
+    parser.add_argument('-o', '--output', metavar='OUTPUT',
                         nargs=1, help="output file path")
     parser.add_argument('-x', metavar='X', default=[x_DEFAULT],
                         nargs=1, help="data x")
@@ -284,7 +284,8 @@ if __name__ == '__main__':
     args['t'] = args['t'][0]
     args['yscale'] = args['yscale'][0]
     args['input'] = args['input'][0]
-    args['output'] = args['output'][0]
+    if args['output'] is not None:
+        args['output'] = args['output'][0]
     args['groupstyle'] = args['groupstyle'][0]
 
     if args['ymax'] is not None:
