@@ -42,7 +42,7 @@ def plot_data(df, ax, para):
     ax.plot(df.ORD, df['scaled_value'], 'k', linewidth=2.0, zorder=1)
     plt.xticks(df.ORD, df[para['x']].tolist(), rotation=90)
     ax.tick_params('x', labelsize=6)
-    ax.tick_params('y', labelsize=12)
+    ax.tick_params('y', labelsize=6)
 
     ax.set_xlim([para['xmin'], para['xmax']])
     ax.set_ylim([para['ymin'], para['ymax']])
@@ -205,6 +205,48 @@ def group_data(df, para):
     return
 
 
+def adjust_yticks(ax, para):
+
+    tmp = para['ymax']
+    ex = 0
+
+    if tmp < 1:
+        return
+    while tmp > 10:
+        tmp /= 10
+        ex += 1
+
+    if tmp > 8:
+        sep = 2
+        n = tmp // 2
+    elif tmp > 6:
+        sep = 1.5
+        n = tmp // 1.5
+    elif tmp > 3:
+        sep = 1
+        n = tmp // 1
+    elif tmp >= 1.5:
+        sep = 0.5
+        n = tmp // 0.5
+    elif tmp <= 1.5:
+        sep = 0.2
+        n = tmp // 0.2
+
+    outyticks = [0]
+    outytick_labels = ['']
+
+    for m in range(int(n)):
+        outyticks.append(sep * (m + 1) * 10**ex)
+        if ex > 2:
+            outytick_labels.append('{:.1E}'.format(outyticks[-1]))
+        else:
+            outytick_labels.append('{:}'.format(outyticks[-1]))
+
+    plt.yticks(outyticks, outytick_labels)
+
+    return
+
+
 def main(para):
 
     # read data to dataframe
@@ -243,6 +285,8 @@ def main(para):
         for level, group_id in enumerate(para['group']):
             add_group_sep(df, ax, group_id, len(para['group']) - level - 1,
                           mode=para['groupstyle'], para=para)
+
+    adjust_yticks(ax, para)
 
     # save figure to file
     plt.savefig(para['output'])
