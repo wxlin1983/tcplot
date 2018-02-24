@@ -81,16 +81,35 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
     ax_height = para['ymax'] - para['ymin']
     sep, group = get_sep(df, group_id)
     if mode == 'line':
-        for s0, s1, gr in zip(sep[1:], sep[:-1], group):
-            codes = [Path.MOVETO, Path.LINETO, Path.MOVETO, Path.LINETO]
-            y0 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
-                  level - igroup_indi_sep_y_in / 2)
-            y1 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
-                  (level + 1) + igroup_indi_sep_y_in / 2)
-            vertices = [(s0, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
-                        (s0, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
-                        (s1, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
-                        (s1, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height))]
+        y0 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
+              level - igroup_indi_sep_y_in / 2)
+        y1 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
+              (level + 1) + igroup_indi_sep_y_in / 2)
+        for s0, s1, gr in zip(sep + [para['xmax']], [0] + sep, group):
+            ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
+                    (fig_size_y_in * ax_size_y_ratio / ax_height), gr, ha='center', va='center')
+        codes = [Path.MOVETO, Path.LINETO, Path.MOVETO, Path.LINETO]
+        vertices = [(0, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
+                    (0, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
+                    (para['xmax'], y0 / (fig_size_y_in *
+                                         ax_size_y_ratio / ax_height)),
+                    (para['xmax'], y1 / (fig_size_y_in * ax_size_y_ratio / ax_height))]
+        vertices = np.array(vertices, float)
+        mypath = Path(vertices, codes)
+        ax.add_patch(
+            patches.PathPatch(
+                mypath,
+                clip_on=False,
+                zorder=200,
+                linewidth=0.75,
+            )
+        )
+        for s in sep:
+            ax.plot([s, s], [para['ymin'], para['ymax']],
+                    '--', linewidth=1.0, zorder=1, color='tab:gray')
+            codes = [Path.MOVETO, Path.LINETO]
+            vertices = [(s, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
+                        (s, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height))]
             vertices = np.array(vertices, float)
             mypath = Path(vertices, codes)
             ax.add_patch(
@@ -101,13 +120,14 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
                     linewidth=0.75,
                 )
             )
-            ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
-                    (fig_size_y_in * ax_size_y_ratio / ax_height), gr, ha='center', va='center')
     elif mode == 'box':
         if 'color_table' not in para.keys():
             para['color_table'] = dict()
         color_idx = 0
-        for s0, s1, gr in zip(sep[1:], sep[:-1], group):
+        for s in sep:
+            ax.plot([s, s], [para['ymin'], para['ymax']],
+                    '--', linewidth=1.0, zorder=1, color='tab:gray')
+        for s0, s1, gr in zip(sep + [para['xmax']], [0] + sep, group):
             if gr not in para['color_table'].keys():
                 while 'C' + str(color_idx) in para['color_table'].values():
                     color_idx += 1
@@ -119,23 +139,10 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
                     s1 - s0,
                     igroup_indi_height_y_in /
                     (fig_size_y_in * ax_size_y_ratio / ax_height),
-                    color=para['color_table'][gr],
+                    fc=para['color_table'][gr],
+                    ec='k',
                     clip_on=False,
                     zorder=200,
-                    linewidth=0.75,
-                )
-            )
-            ax.add_patch(
-                patches.Rectangle(
-                    (s0, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 1)) /
-                     (fig_size_y_in * ax_size_y_ratio / ax_height)),
-                    s1 - s0,
-                    igroup_indi_height_y_in /
-                    (fig_size_y_in * ax_size_y_ratio / ax_height),
-                    fill=False,
-                    clip_on=False,
-                    zorder=200,
-                    linewidth=0.75,
                 )
             )
             ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
@@ -155,7 +162,7 @@ def get_sep(df, group_id):
 
     gn = df[group_id].tolist()
     current = gn[0]
-    sep = [0]
+    sep = []
     group = []
     for idx, n in enumerate(gn[1:]):
         if current != n:
@@ -163,7 +170,6 @@ def get_sep(df, group_id):
             group.append(current)
             current = n
 
-    sep.append(idx + 2)
     group.append(current)
     return sep, group
 
@@ -212,6 +218,7 @@ def adjust_yticks(ax, para):
 
     if tmp < 1:
         return
+
     while tmp > 10:
         tmp /= 10
         ex += 1
@@ -423,7 +430,6 @@ if __name__ == '__main__':
                     else:
                         expr = vname + '.set(' + vvalue + ')'
                     exec(expr)
-                    print('exec \'{:}\''.format(expr))
                 except:
                     print('fail to exec \'{:}\''.format(expr))
                     pass
