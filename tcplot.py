@@ -18,14 +18,18 @@ x_DEFAULT = 'id'
 y_DEFAULT = 'value'
 yscale_DEFAULT = 1
 
-ax_offset_x_ratio = 0.05
-ax_offset_y_ratio = 0.45
-ax_size_x_ratio = 0.925
-ax_size_y_ratio = 0.5
-
 fig_size_x_in = 10
 fig_size_y_in = 2.5
+
+ax_size_y_in = 9.25
+ax_size_x_in = 1.25
+ax_padding_x_left_in = 0.5
+ax_padding_y_bottom_in = 1.125
+
 dot_radius_in = 0.1
+
+ax_size_x_ratio = ax_size_y_in / fig_size_x_in
+ax_size_y_ratio = ax_size_x_in / fig_size_y_in
 
 igroup_indi_offset_y_in = 0.6
 igroup_indi_height_y_in = 0.2
@@ -235,9 +239,9 @@ def adjust_yticks(ax, para):
             sep = 1.5
         elif tmp > 3:
             sep = 1
-        elif tmp >= 1.5:
+        elif tmp > 1.5:
             sep = 0.5
-        elif tmp <= 1.5:
+        else:
             sep = 0.2
 
     n = int(tmp // sep)
@@ -276,7 +280,7 @@ def main(para):
 
     fig = plt.figure(figsize=[fig_size_x_in, fig_size_y_in], dpi=fig_dpi)
     ax = fig.add_axes(
-        [ax_offset_x_ratio, ax_offset_y_ratio, ax_size_x_ratio, ax_size_y_ratio])
+        [ax_padding_x_left_in / fig_size_x_in, ax_padding_y_bottom_in / fig_size_y_in, ax_size_x_ratio, ax_size_y_ratio])
 
     # plot base plot
     plot_data(df, ax, para)
