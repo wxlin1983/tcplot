@@ -40,6 +40,7 @@ def plot_data(df, ax, para):
     ax_width = para['xmax'] - para['xmin']
 
     ax.plot(df.ORD, df['scaled_value'], 'k', linewidth=2.0, zorder=1)
+    # ax.bar(df.ORD, df['scaled_value'], zorder=1)
     plt.xticks(df.ORD, df[para['x']].tolist(), rotation=90)
     ax.tick_params('x', labelsize=6)
     ax.tick_params('y', labelsize=6)
@@ -79,7 +80,7 @@ def plot_data(df, ax, para):
 def add_group_sep(df, ax, group_id, level, para, mode='line'):
 
     ax_height = para['ymax'] - para['ymin']
-    sep, group = get_sep(df, group_id)
+    sep, group = cal_sep(df, group_id)
     if mode == 'line':
         y0 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
               level - igroup_indi_sep_y_in / 2)
@@ -152,25 +153,30 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
 
 
 def add_spec_line(df, ax, spec, label, para, col='r'):
+
     ax.plot([para['xmin'], para['xmax']],
-            [spec, spec], '--', linewidth=1.0, zorder=1, color=col)
-    ax.text(0, spec, label, ha='left', va='bottom', color=col)
+            [spec, spec], '--', lw=1.0, zorder=1, color=col)
+    ax.text(0, spec, '{:}: {:}'.format(label, spec),
+            ha='left', va='bottom', color=col)
+
     return
 
 
-def get_sep(df, group_id):
+def cal_sep(df, group_id):
 
     gn = df[group_id].tolist()
+
     current = gn[0]
     sep = []
     group = []
+
     for idx, n in enumerate(gn[1:]):
         if current != n:
             sep.append(idx + 1)
             group.append(current)
             current = n
-
     group.append(current)
+
     return sep, group
 
 
@@ -216,39 +222,32 @@ def adjust_yticks(ax, para):
     tmp = para['ymax']
     ex = 0
 
-    if tmp < 1:
-        return
-
     while tmp > 10:
         tmp /= 10
         ex += 1
 
-    if tmp > 8:
-        sep = 2
-        n = tmp // 2
-    elif tmp > 6:
-        sep = 1.5
-        n = tmp // 1.5
-    elif tmp > 3:
+    if ex == 0:
         sep = 1
-        n = tmp // 1
-    elif tmp >= 1.5:
-        sep = 0.5
-        n = tmp // 0.5
-    elif tmp <= 1.5:
-        sep = 0.2
-        n = tmp // 0.2
+    else:
+        if tmp > 8:
+            sep = 2
+        elif tmp > 6:
+            sep = 1.5
+        elif tmp > 3:
+            sep = 1
+        elif tmp >= 1.5:
+            sep = 0.5
+        elif tmp <= 1.5:
+            sep = 0.2
 
-    outyticks = [0]
-    outytick_labels = ['']
+    n = int(tmp // sep)
 
-    for m in range(int(n)):
-        outyticks.append(sep * (m + 1) * 10**ex)
-        if ex > 2:
-            outytick_labels.append('{:.1E}'.format(outyticks[-1]))
-        else:
-            outytick_labels.append('{:}'.format(outyticks[-1]))
-
+    if ex > 2:
+        outformat = '{:.1E}'
+    else:
+        outformat = '{:g}'
+    outyticks = [(sep * (m + 1) * 10**ex) for m in range(n)]
+    outytick_labels = [outformat.format(m) for m in outyticks]
     plt.yticks(outyticks, outytick_labels)
 
     return
