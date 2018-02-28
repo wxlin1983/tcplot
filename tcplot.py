@@ -6,8 +6,8 @@ from tkinter import *
 from tkinter import filedialog as fd
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from matplotlib.path import Path
+import matplotlib.patches as pch
+from matplotlib.path import Path as pth
 
 import argparse
 
@@ -21,15 +21,16 @@ yscale_DEFAULT = 1
 fig_size_x_in = 10
 fig_size_y_in = 2.5
 
-ax_size_y_in = 9.25
-ax_size_x_in = 1.25
+ax_size_x_in = 9.25
+ax_size_y_in = 1.25
 ax_padding_x_left_in = 0.5
 ax_padding_y_bottom_in = 1.125
 
 dot_radius_in = 0.1
+dot_radius_min_in = 0.05
 
-ax_size_x_ratio = ax_size_y_in / fig_size_x_in
-ax_size_y_ratio = ax_size_x_in / fig_size_y_in
+ax_size_x_ratio = ax_size_x_in / fig_size_x_in
+ax_size_y_ratio = ax_size_y_in / fig_size_y_in
 
 igroup_indi_offset_y_in = 0.6
 igroup_indi_height_y_in = 0.2
@@ -43,8 +44,11 @@ def plot_data(df, ax, para):
     ax_height = para['ymax'] - para['ymin']
     ax_width = para['xmax'] - para['xmin']
 
-    ax.plot(df.ORD, df['scaled_value'], 'k', linewidth=2.0, zorder=1)
-    # ax.bar(df.ORD, df['scaled_value'], zorder=1)
+    if para['chartstyle'] == 'chart':
+        ax.plot(df.ORD, df['scaled_value'], 'k', linewidth=2.0, zorder=1)
+    elif para['chartstyle'] == 'bar':
+        ax.bar(df.ORD, df['scaled_value'], zorder=1)
+
     plt.xticks(df.ORD, df[para['x']].tolist(), rotation=90)
     ax.tick_params('x', labelsize=6)
     ax.tick_params('y', labelsize=6)
@@ -52,33 +56,34 @@ def plot_data(df, ax, para):
     ax.set_xlim([para['xmin'], para['xmax']])
     ax.set_ylim([para['ymin'], para['ymax']])
 
-    dot_radius_x = (dot_radius_in / fig_size_y_in *
-                    ax_size_y_ratio) * ax_width
+    # adjust dot size
+    my_dot_radius_in = dot_radius_in
+    tmpdot = 1.5 * ax_size_x_in / len(df.ORD.tolist()) / 2
 
-    for x, y in zip(df.ORD, df['scaled_value']):
-        ax.add_patch(
-            patches.Ellipse(
-                (x, y),
-                dot_radius_x,
-                dot_radius_x / ((fig_size_y_in * ax_size_y_ratio / ax_height) /
-                                (fig_size_x_in * ax_size_x_ratio / ax_width)),
-                clip_on=False,
-                zorder=200,
-                color='tab:orange'
+    if my_dot_radius_in > tmpdot:
+        my_dot_radius_in = tmpdot
+    if my_dot_radius_in < dot_radius_min_in:
+        my_dot_radius_in = dot_radius_min_in
+
+    # add dot if chartstyle is chart
+    if para['chartstyle'] == 'chart':
+        dot_radius_x = (my_dot_radius_in / fig_size_y_in *
+                        ax_size_y_ratio) * ax_width
+
+        for x, y in zip(df.ORD, df['scaled_value']):
+            ax.add_patch(
+                pch.Ellipse(
+                    (x, y),
+                    dot_radius_x,
+                    dot_radius_x / ((fig_size_y_in * ax_size_y_ratio / ax_height) /
+                                    (fig_size_x_in * ax_size_x_ratio / ax_width)),
+                    clip_on=False,
+                    zorder=200,
+                    fc='tab:orange',
+                    ec='k',
+                    linewidth=2
+                )
             )
-        )
-        ax.add_patch(
-            patches.Ellipse(
-                (x, y),
-                dot_radius_x,
-                dot_radius_x / ((fig_size_y_in * ax_size_y_ratio / ax_height) /
-                                (fig_size_x_in * ax_size_x_ratio / ax_width)),
-                clip_on=False,
-                fill=False,
-                zorder=200,
-                linewidth=2,
-            )
-        )
 
 
 def add_group_sep(df, ax, group_id, level, para, mode='line'):
@@ -93,16 +98,16 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
         for s0, s1, gr in zip(sep + [para['xmax']], [0] + sep, group):
             ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
                     (fig_size_y_in * ax_size_y_ratio / ax_height), gr, ha='center', va='center')
-        codes = [Path.MOVETO, Path.LINETO, Path.MOVETO, Path.LINETO]
+        codes = [pth.MOVETO, pth.LINETO, pth.MOVETO, pth.LINETO]
         vertices = [(0, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
                     (0, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
                     (para['xmax'], y0 / (fig_size_y_in *
                                          ax_size_y_ratio / ax_height)),
                     (para['xmax'], y1 / (fig_size_y_in * ax_size_y_ratio / ax_height))]
         vertices = np.array(vertices, float)
-        mypath = Path(vertices, codes)
+        mypath = pth(vertices, codes)
         ax.add_patch(
-            patches.PathPatch(
+            pch.PathPatch(
                 mypath,
                 clip_on=False,
                 zorder=200,
@@ -112,13 +117,13 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
         for s in sep:
             ax.plot([s, s], [para['ymin'], para['ymax']],
                     '--', linewidth=1.0, zorder=1, color='tab:gray')
-            codes = [Path.MOVETO, Path.LINETO]
+            codes = [pth.MOVETO, pth.LINETO]
             vertices = [(s, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
                         (s, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height))]
             vertices = np.array(vertices, float)
-            mypath = Path(vertices, codes)
+            mypath = pth(vertices, codes)
             ax.add_patch(
-                patches.PathPatch(
+                pch.PathPatch(
                     mypath,
                     clip_on=False,
                     zorder=200,
@@ -138,7 +143,7 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
                     color_idx += 1
                 para['color_table'][gr] = 'C' + str(color_idx)
             ax.add_patch(
-                patches.Rectangle(
+                pch.Rectangle(
                     (s0, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 1)) /
                         (fig_size_y_in * ax_size_y_ratio / ax_height)),
                     s1 - s0,
@@ -246,12 +251,12 @@ def adjust_yticks(ax, para):
 
     n = int(tmp // sep)
 
-    if ex > 2:
-        outformat = '{:.1E}'
-    else:
-        outformat = '{:g}'
     outyticks = [(sep * (m + 1) * 10**ex) for m in range(n)]
-    outytick_labels = [outformat.format(m) for m in outyticks]
+    if ex > 2:
+        outytick_labels = ['{:.1E}'.format(m) for m in outyticks]
+        outytick_labels = [m[:-3] + m[-1] for m in outytick_labels]
+    else:
+        outytick_labels = ['{:g}'.format(m) for m in outyticks]
     plt.yticks(outyticks, outytick_labels)
 
     return
@@ -311,6 +316,8 @@ if __name__ == '__main__':
                         nargs=1, help="input excel or csv file")
     parser.add_argument('-c', '--condition', metavar='CONDITION', default=[],
                         nargs='+', help="condition excel or csv file")
+    parser.add_argument('--color', metavar='COLOR', default=[],
+                        nargs=1, help="color")
     parser.add_argument('-o', '--output', metavar='OUTPUT',
                         nargs=1, help="output file path")
     parser.add_argument('-x', metavar='X', default=[x_DEFAULT],
@@ -325,8 +332,10 @@ if __name__ == '__main__':
                         nargs=1, help="data time")
     parser.add_argument('-g', '--group', metavar='GROUPS',
                         nargs='+', help="grouping condition")
-    parser.add_argument('--groupstyle', metavar='STYLE', default=['box'], type=str,
+    parser.add_argument('--groupstyle', metavar='GROUPSTYLE', default=['box'], type=str,
                         nargs=1, help="grouping style (line or box)")
+    parser.add_argument('--chartstyle', metavar='CHARTSTYLE', default=['chart'], type=str,
+                        nargs=1, help="chart style (chart or bar)")
     parser.add_argument('--spec', metavar='SPEC',
                         nargs='+', help="add spec indication")
     parser.add_argument('--gui', action='store_true')
@@ -341,6 +350,7 @@ if __name__ == '__main__':
     if args['output'] is not None:
         args['output'] = args['output'][0]
     args['groupstyle'] = args['groupstyle'][0]
+    args['chartstyle'] = args['chartstyle'][0]
 
     if args['ymax'] is not None:
         args['ymax'] = args['ymax'][0]
@@ -458,7 +468,7 @@ if __name__ == '__main__':
         input_dirname = StringVar()
 
         input_b0 = Button(row0, width=4, text="run", command=run)
-        input_b1 = Button(row0, width=6, text="folder", command=get_wd)
+        input_b1 = Button(row0, width=6, text="profile", command=get_wd)
         input_b2 = Button(row0, width=10, text="load config",
                           command=load_config)
         input_b3 = Button(row0, width=10, text="save config",
