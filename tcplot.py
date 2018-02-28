@@ -13,6 +13,7 @@ import argparse
 
 input_DEFAULT = 'data.xlsx'
 output_DEFAULT = 'output.png'
+profile_DEFAULT = 'default.xlsx'
 t_DEFAULT = 'time'
 x_DEFAULT = 'id'
 y_DEFAULT = 'value'
@@ -51,7 +52,7 @@ def plot_data(df, ax, para):
 
     plt.xticks(df.ORD, df[para['x']].tolist(), rotation=90)
     ax.tick_params('x', labelsize=6)
-    ax.tick_params('y', labelsize=6)
+    ax.tick_params('y', labelsize=8)
 
     ax.set_xlim([para['xmin'], para['xmax']])
     ax.set_ylim([para['ymin'], para['ymax']])
@@ -380,15 +381,30 @@ if __name__ == '__main__':
         def get_wd():
             tmp = fd.askdirectory()
             if tmp != '':
-                input_dirname.set(tmp)
+                input_dirname.set(op.normpath(tmp))
+                tmppf = op.normpath(op.join(tmp, profile_DEFAULT))
+                if op.exists(tmppf):
+                    input_profile.set(tmppf)
+            return
+
+        def get_pf():
+            tmp = fd.askopenfilename()
+            if tmp != '':
+                input_profile.set(op.normpath(tmp))
             return
 
         def run():
             if input_dirname.get() != '':
-                args['input'] = op.join(input_dirname.get(), input_DEFAULT)
-                if args['output'] is None:
-                    args['output'] = op.join(
-                        input_dirname.get(), output_DEFAULT)
+                if input_profile.get() == '':
+                    args['input'] = op.normpath(
+                        op.join(input_dirname.get(), input_DEFAULT))
+                    args['output'] = op.normpath(op.join(
+                        input_dirname.get(), output_DEFAULT))
+                else:
+                    args['input'] = op.normpath(
+                        op.join(input_dirname.get(), input_input.get()))
+                    args['output'] = op.normpath(
+                        op.join(input_dirname.get(), input_output.get()))
                 if data_x.get() != '':
                     args['x'] = data_x.get()
                 if data_y.get() != '':
@@ -425,31 +441,27 @@ if __name__ == '__main__':
             return
 
         def load_config():
-            if input_dirname.get() == '':
-                return
             try:
-                tmp = pd.read_excel(
-                    op.join(input_dirname.get(), 'config.xlsx'), sheet_name='Sheet1')
+                tmp = pd.read_excel(input_profile.get())
                 tmp.fillna('', inplace=True)
+                for vpair in tmp[['vname', 'vvalue', 'vtype']].values.tolist():
+                    vname = str(vpair[0])
+                    vvalue = str(vpair[1])
+                    vtype = str(vpair[2])
+                    try:
+                        if vtype == 'String':
+                            expr = vname + '.set(\'' + vvalue + '\')'
+                        else:
+                            expr = vname + '.set(' + vvalue + ')'
+                        exec(expr)
+                    except:
+                        print('fail to exec \'{:}\''.format(expr))
+                        pass
             except:
                 return
-            for vpair in tmp[['vname', 'vvalue', 'vtype']].values.tolist():
-                vname = str(vpair[0])
-                vvalue = str(vpair[1])
-                vtype = str(vpair[2])
-                try:
-                    if vtype == 'String':
-                        expr = vname + '.set(\'' + vvalue + '\')'
-                    else:
-                        expr = vname + '.set(' + vvalue + ')'
-                    exec(expr)
-                except:
-                    print('fail to exec \'{:}\''.format(expr))
-                    pass
-            return
 
         def save_config():
-            if input_dirname.get() == '':
+            if input_profile.get() == '':
                 return
             vname = []
             vvalue = []
@@ -460,26 +472,76 @@ if __name__ == '__main__':
                 vvalue.append(str(eval(vpair[0] + '.get()')))
             tmpdf = pd.DataFrame(
                 {'vname': vname, 'vvalue': vvalue, 'vtype': vtype})
-            tmpdf.to_excel(
-                op.join(input_dirname.get(), 'config.xlsx'), sheet_name='Sheet1', index=False)
-            return
+            try:
+                tmpdf.to_excel(input_profile.get(),
+                               sheet_name='Sheet1', index=False)
+            except:
+                pass
 
         # row 0
         input_dirname = StringVar()
+        input_profile = StringVar()
+        input_input = StringVar()
+        input_output = StringVar()
+        input_cond0 = StringVar()
+        input_cond1 = StringVar()
+        input_cond2 = StringVar()
 
-        input_b0 = Button(row0, width=4, text="run", command=run)
-        input_b1 = Button(row0, width=6, text="profile", command=get_wd)
-        input_b2 = Button(row0, width=10, text="load config",
+        to_save.append(['input_input', 'String'])
+        to_save.append(['input_output', 'String'])
+        to_save.append(['input_cond0', 'String'])
+        to_save.append(['input_cond1', 'String'])
+        to_save.append(['input_cond2', 'String'])
+
+        row00 = Frame(row0)
+        row01 = Frame(row0)
+        row02 = Frame(row0)
+
+        row00.grid(row=0, column=0, sticky='W')
+        row01.grid(row=1, column=0, sticky='W')
+        row02.grid(row=2, column=0, sticky='W')
+
+        # row00
+        input_b1 = Button(row00, width=6, text="folder", command=get_wd)
+        input_et1 = Entry(row00, width=58, textvariable=input_dirname)
+        input_b0 = Button(row00, width=6, text="run", command=run)
+        input_b6 = Button(row00, width=6, text="help")
+
+        input_b1.grid(row=0, column=0)
+        input_et1.grid(row=0, column=1)
+        input_b0.grid(row=0, column=2)
+        input_b6.grid(row=0, column=3)
+
+        # row01
+        input_b4 = Button(row01, width=6, text="profile", command=get_pf)
+        input_et0 = Entry(row01, width=58, textvariable=input_profile)
+        input_b2 = Button(row01, width=6, text="load",
                           command=load_config)
-        input_b3 = Button(row0, width=10, text="save config",
+        input_b3 = Button(row01, width=6, text="save",
                           command=save_config)
-        input_et0 = Entry(row0, width=58, textvariable=input_dirname)
 
-        input_b0.grid(row=0, column=0)
+        input_b4.grid(row=0, column=0)
         input_et0.grid(row=0, column=1)
-        input_b1.grid(row=0, column=2)
-        input_b2.grid(row=0, column=3)
-        input_b3.grid(row=0, column=4)
+        input_b2.grid(row=0, column=2)
+        input_b3.grid(row=0, column=3)
+
+        # row02
+        input_et2 = Entry(row02, width=8, textvariable=input_input)
+        input_et3 = Entry(row02, width=8, textvariable=input_output)
+        input_et4 = Entry(row02, width=8, textvariable=input_cond0)
+        input_et5 = Entry(row02, width=8, textvariable=input_cond1)
+        input_et6 = Entry(row02, width=8, textvariable=input_cond2)
+
+        Label(row02, text='data', width=5).grid(row=0, column=0)
+        input_et2.grid(row=0, column=1)
+        Label(row02, text='chart', width=5).grid(row=0, column=2)
+        input_et3.grid(row=0, column=3)
+        Label(row02, text='cond_0', width=7).grid(row=0, column=4)
+        input_et4.grid(row=0, column=5)
+        Label(row02, text='cond_1', width=7).grid(row=0, column=6)
+        input_et5.grid(row=0, column=7)
+        Label(row02, text='cond_2', width=7).grid(row=0, column=8)
+        input_et6.grid(row=0, column=9)
 
         # row 1
         data_x = StringVar()
