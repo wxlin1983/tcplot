@@ -24,18 +24,17 @@ y_DEFAULT = 'value'
 yscale_DEFAULT = 1
 
 fig_size_x_in = 10
-fig_size_y_in = 2.5
-
 ax_size_x_in = 9.25
-ax_size_y_in = 1.25
 ax_padding_x_left_in = 0.5
-ax_padding_y_bottom_in = 1.125
+ax_size_x_ratio = ax_size_x_in / fig_size_x_in
+
+fig_size_y_in_DEFAULT = 2.5
+ax_size_y_in_DEFAULT = 1.25
+ax_padding_y_bottom_in_DEFAULT = 1.125
 
 dot_radius_in = 0.1
 dot_radius_min_in = 0.05
 
-ax_size_x_ratio = ax_size_x_in / fig_size_x_in
-ax_size_y_ratio = ax_size_y_in / fig_size_y_in
 
 igroup_indi_offset_y_in = 0.6
 igroup_indi_height_y_in = 0.2
@@ -50,8 +49,10 @@ def plot_data(df, ax, para):
     ax_width = para['xmax'] - para['xmin']
 
     if para['chartstyle'] == 'chart':
+        logger.info('add main chart')
         ax.plot(df.ORD, df['scaled_value'], 'k', linewidth=2.0, zorder=1)
     elif para['chartstyle'] == 'bar':
+        logger.info('add main bar plot')
         ax.bar(df.ORD, df['scaled_value'], zorder=1)
 
     plt.xticks(df.ORD, df[para['x']].tolist(), rotation=90)
@@ -82,8 +83,8 @@ def plot_data(df, ax, para):
 
     # add dot if chartstyle is chart
     if para['chartstyle'] == 'chart':
-        dot_radius_x = (my_dot_radius_in / fig_size_y_in *
-                        ax_size_y_ratio) * ax_width
+        dot_radius_x = (my_dot_radius_in / para['fig_size_y_in'] *
+                        para['ax_size_y_ratio']) * ax_width
 
         if para['color'] in df.columns:
             color_columns = para['color']
@@ -97,19 +98,20 @@ def plot_data(df, ax, para):
             else:
                 fc_color = para['color_table'][z]
 
-            ax.add_patch(
-                pch.Ellipse(
-                    (x, y),
-                    dot_radius_x,
-                    dot_radius_x / ((fig_size_y_in * ax_size_y_ratio / ax_height) /
-                                    (fig_size_x_in * ax_size_x_ratio / ax_width)),
-                    clip_on=False,
-                    zorder=200,
-                    fc=fc_color,
-                    ec='k',
-                    linewidth=2
+            if y <= para['ymax']:
+                ax.add_patch(
+                    pch.Ellipse(
+                        (x, y),
+                        dot_radius_x,
+                        dot_radius_x / ((para['fig_size_y_in'] * para['ax_size_y_ratio'] / ax_height) /
+                                        (fig_size_x_in * ax_size_x_ratio / ax_width)),
+                        clip_on=False,
+                        zorder=200,
+                        fc=fc_color,
+                        ec='k',
+                        linewidth=2
+                    )
                 )
-            )
 
 
 def add_group_sep(df, ax, group_id, level, para, mode='line'):
@@ -117,6 +119,7 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
     ax_height = para['ymax'] - para['ymin']
     sep, group = cal_sep(df, group_id)
     if mode == 'line':
+        logger.info('add lines for level {:} group separation.'.format(level))
         y0 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
               level - igroup_indi_sep_y_in / 2)
         y1 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
@@ -124,13 +127,14 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
         if not para['grouptextblank']:
             for s0, s1, gr in zip(sep + [para['xmax']], [0] + sep, group):
                 ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
-                        (fig_size_y_in * ax_size_y_ratio / ax_height), gr, ha='center', va='center')
+                        (para['fig_size_y_in'] * para['ax_size_y_ratio'] / ax_height), gr, ha='center', va='center')
         codes = [pth.MOVETO, pth.LINETO, pth.MOVETO, pth.LINETO]
-        vertices = [(0, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
-                    (0, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
-                    (para['xmax'], y0 / (fig_size_y_in *
-                                         ax_size_y_ratio / ax_height)),
-                    (para['xmax'], y1 / (fig_size_y_in * ax_size_y_ratio / ax_height))]
+        vertices = [(0, y0 / (para['fig_size_y_in'] * para['ax_size_y_ratio'] / ax_height)),
+                    (0, y1 / (para['fig_size_y_in']
+                              * para['ax_size_y_ratio'] / ax_height)),
+                    (para['xmax'], y0 / (para['fig_size_y_in'] *
+                                         para['ax_size_y_ratio'] / ax_height)),
+                    (para['xmax'], y1 / (para['fig_size_y_in'] * para['ax_size_y_ratio'] / ax_height))]
         vertices = np.array(vertices, float)
         mypath = pth(vertices, codes)
         ax.add_patch(
@@ -145,8 +149,8 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
             ax.plot([s, s], [para['ymin'], para['ymax']],
                     '--', linewidth=1.0, zorder=1, color='tab:gray')
             codes = [pth.MOVETO, pth.LINETO]
-            vertices = [(s, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
-                        (s, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height))]
+            vertices = [(s, y0 / (para['fig_size_y_in'] * para['ax_size_y_ratio'] / ax_height)),
+                        (s, y1 / (para['fig_size_y_in'] * para['ax_size_y_ratio'] / ax_height))]
             vertices = np.array(vertices, float)
             mypath = pth(vertices, codes)
             ax.add_patch(
@@ -158,6 +162,7 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
                 )
             )
     elif mode == 'box':
+        logger.info('add boxes for level {:} group separation.'.format(level))
         color_idx = 0
         for s in sep:
             ax.plot([s, s], [para['ymin'], para['ymax']],
@@ -170,10 +175,11 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
             ax.add_patch(
                 pch.Rectangle(
                     (s0, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 1)) /
-                        (fig_size_y_in * ax_size_y_ratio / ax_height)),
+                        (para['fig_size_y_in'] * para['ax_size_y_ratio'] / ax_height)),
                     s1 - s0,
                     igroup_indi_height_y_in /
-                    (fig_size_y_in * ax_size_y_ratio / ax_height),
+                    (para['fig_size_y_in'] *
+                     para['ax_size_y_ratio'] / ax_height),
                     fc=para['color_table'][gr],
                     ec='k',
                     clip_on=False,
@@ -182,14 +188,14 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
             )
             if not para['grouptextblank']:
                 ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
-                        (fig_size_y_in * ax_size_y_ratio / ax_height), gr, ha='center', va='center', zorder=201)
+                        (para['fig_size_y_in'] * para['ax_size_y_ratio'] / ax_height), gr, ha='center', va='center', zorder=201)
 
     return
 
 
 def add_spec_line(df, ax, spec, label, para, col='r'):
 
-    logger.info('adding spec line: {:}: {:}'.format(label, spec))
+    logger.info('adding spec line: {:}={:}'.format(label, spec))
     ax.plot([para['xmin'], para['xmax']],
             [spec, spec], '--', lw=1.0, zorder=1, color=col)
     ax.text(0, spec, '{:}: {:}'.format(label, spec),
@@ -320,9 +326,10 @@ def main(para):
     plt.clf()
     plt.close()
 
-    fig = plt.figure(figsize=[fig_size_x_in, fig_size_y_in], dpi=fig_dpi)
+    fig = plt.figure(
+        figsize=[fig_size_x_in, para['fig_size_y_in']], dpi=fig_dpi)
     ax = fig.add_axes(
-        [ax_padding_x_left_in / fig_size_x_in, ax_padding_y_bottom_in / fig_size_y_in, ax_size_x_ratio, ax_size_y_ratio])
+        [ax_padding_x_left_in / fig_size_x_in, para['ax_padding_y_bottom_in'] / para['fig_size_y_in'], ax_size_x_ratio, para['ax_size_y_ratio']])
 
     # plot base plot
     plot_data(df, ax, para)
@@ -342,6 +349,7 @@ def main(para):
 
     # save figure to file
     plt.savefig(para['output'])
+    logger.info('saved figure to \"{:}\".'.format(para['output']))
 
 
 if __name__ == '__main__':
@@ -411,6 +419,11 @@ if __name__ == '__main__':
     args['color_table'] = dict()
     args['color'] = args['color'][0]
 
+    args['fig_size_y_in'] = fig_size_y_in_DEFAULT
+    args['ax_size_y_in'] = ax_size_y_in_DEFAULT
+    args['ax_padding_y_bottom_in'] = ax_padding_y_bottom_in_DEFAULT
+    args['ax_size_y_ratio'] = args['ax_size_y_in'] / args['fig_size_y_in']
+
     if args['gui']:
 
         logger.info('starting gui.')
@@ -427,10 +440,12 @@ if __name__ == '__main__':
         row1.grid(row=1, column=0, sticky=W)
         row2 = LabelFrame(frame, text="time", padx=4, pady=4)
         row2.grid(row=2, column=0, sticky=W)
+        row5 = LabelFrame(frame, text="style", padx=4, pady=4)
+        row5.grid(row=3, column=0, sticky=W)
         row3 = LabelFrame(frame, text="grouping", padx=4, pady=4)
-        row3.grid(row=3, column=0, sticky=W)
+        row3.grid(row=4, column=0, sticky=W)
         row4 = LabelFrame(frame, text="spec", padx=4, pady=4)
-        row4.grid(row=4, column=0, sticky=W)
+        row4.grid(row=5, column=0, sticky=W)
 
         to_save = []
 
@@ -494,15 +509,19 @@ if __name__ == '__main__':
                         pass
                 if time_t.get() != '':
                     args['t'] = time_t.get()
+                if scale_color.get() != '':
+                    args['color'] = scale_color.get()
                 if group_enable.get():
                     args['groupstyle'] = {0: "box",
                                           1: "line"}[group_style.get()]
-                    args['group'] = [group_type0.get(), group_type1.get(),
-                                     group_type2.get()]
-                if group_text_disable.get():
-                    args['grouptextblank'] = True
-                else:
-                    args['grouptextblank'] = False
+                    args['group'] = []
+                    if group_type0.get() != '':
+                        args['group'].append(group_type0.get())
+                    if group_type1.get() != '':
+                        args['group'].append(group_type1.get())
+                    if group_type2.get() != '':
+                        args['group'].append(group_type2.get())
+                args['grouptextblank'] = group_text_disable.get()
                 if spec_enable.get():
                     args['spec'] = []
                     if (spec_name0.get() != '') and (spec_value0.get() != ''):
@@ -514,6 +533,14 @@ if __name__ == '__main__':
             else:
                 logger.info(
                     'no working directory set in gui, continuing with cli arguments')
+
+            if len(args['group']) != 2:
+                args['fig_size_y_in'] += igroup_indi_height_y_in * \
+                    (len(args['group']) - 2)
+                args['ax_padding_y_bottom_in'] += igroup_indi_height_y_in * \
+                    (len(args['group']) - 2)
+                args['ax_size_y_ratio'] = args['ax_size_y_in'] / \
+                    args['fig_size_y_in']
 
             main(args)
             return
@@ -581,7 +608,7 @@ if __name__ == '__main__':
 
         # row00
         input_b1 = Button(row00, width=6, text="folder", command=get_wd)
-        input_et1 = Entry(row00, width=61, textvariable=input_dirname)
+        input_et1 = Entry(row00, width=65, textvariable=input_dirname)
         input_b0 = Button(row00, width=6, text="run", command=run)
         input_b6 = Button(row00, width=6, text="help")
 
@@ -592,7 +619,7 @@ if __name__ == '__main__':
 
         # row01
         input_b4 = Button(row01, width=6, text="profile", command=get_pf)
-        input_et0 = Entry(row01, width=61, textvariable=input_profile)
+        input_et0 = Entry(row01, width=65, textvariable=input_profile)
         input_b2 = Button(row01, width=6, text="load",
                           command=load_config)
         input_b3 = Button(row01, width=6, text="save",
@@ -637,9 +664,9 @@ if __name__ == '__main__':
         data_et2 = Entry(row1, width=8, textvariable=data_yscale)
         data_et3 = Entry(row1, width=8, textvariable=data_ymax)
 
-        Label(row1, text='x').grid(row=0, column=0)
+        Label(row1, text='X').grid(row=0, column=0)
         data_et0.grid(row=0, column=1)
-        Label(row1, text='y').grid(row=0, column=2)
+        Label(row1, text='Y').grid(row=0, column=2)
         data_et1.grid(row=0, column=3)
         Label(row1, text='yscale').grid(row=0, column=4)
         data_et2.grid(row=0, column=5)
@@ -651,10 +678,18 @@ if __name__ == '__main__':
         to_save.append(['time_t', 'String'])
 
         time_et0 = Entry(row2, width=8, textvariable=time_t)
-        Label(row2, text='t').grid(row=0, column=0)
+        Label(row2, text='T').grid(row=0, column=0)
         time_et0.grid(row=0, column=1)
 
         # row 3
+        scale_color = StringVar()
+
+        scale_et0 = Entry(row5, width=8, textvariable=scale_color)
+
+        Label(row5, text='COLOR', width=5).grid(row=0, column=0)
+        scale_et0.grid(row=0, column=1)
+
+        # row 4
         group_enable = BooleanVar()
         group_text_disable = BooleanVar()
         group_style = IntVar()
@@ -684,14 +719,14 @@ if __name__ == '__main__':
         group_cb1.grid(row=0, column=1)
         group_rb0.grid(row=0, column=2)
         group_rb1.grid(row=0, column=3)
-        Label(row3, text='group 1').grid(row=0, column=4)
+        Label(row3, text='GROUP_1').grid(row=0, column=4)
         group_et0.grid(row=0, column=5)
-        Label(row3, text='group 2').grid(row=0, column=6)
+        Label(row3, text='GROUP_2').grid(row=0, column=6)
         group_et1.grid(row=0, column=7)
-        Label(row3, text='group 3').grid(row=0, column=8)
+        Label(row3, text='GROUP_3').grid(row=0, column=8)
         group_et2.grid(row=0, column=9)
 
-        # row 4
+        # row 5
         spec_enable = BooleanVar()
         spec_name0 = StringVar()
         spec_value0 = StringVar()
