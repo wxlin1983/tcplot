@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os.path as op
+import logging
 
 from tkinter import *
 from tkinter import filedialog as fd
@@ -10,6 +11,7 @@ import matplotlib.patches as pch
 from matplotlib.path import Path as pth
 
 import argparse
+
 
 input_DEFAULT = 'data.xlsx'
 output_DEFAULT = 'output.png'
@@ -96,9 +98,10 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
               level - igroup_indi_sep_y_in / 2)
         y1 = (-igroup_indi_offset_y_in - igroup_indi_height_y_in *
               (level + 1) + igroup_indi_sep_y_in / 2)
-        for s0, s1, gr in zip(sep + [para['xmax']], [0] + sep, group):
-            ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
-                    (fig_size_y_in * ax_size_y_ratio / ax_height), gr, ha='center', va='center')
+        if not para['grouptextblank']:
+            for s0, s1, gr in zip(sep + [para['xmax']], [0] + sep, group):
+                ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
+                        (fig_size_y_in * ax_size_y_ratio / ax_height), gr, ha='center', va='center')
         codes = [pth.MOVETO, pth.LINETO, pth.MOVETO, pth.LINETO]
         vertices = [(0, y0 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
                     (0, y1 / (fig_size_y_in * ax_size_y_ratio / ax_height)),
@@ -156,8 +159,9 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
                     zorder=200,
                 )
             )
-            ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
-                    (fig_size_y_in * ax_size_y_ratio / ax_height), gr, ha='center', va='center', zorder=201)
+            if not para['grouptextblank']:
+                ax.text(s0 / 2 + s1 / 2, (-igroup_indi_offset_y_in - igroup_indi_height_y_in * (level + 0.5) - igroup_indi_sep_y_in / 2) /
+                        (fig_size_y_in * ax_size_y_ratio / ax_height), gr, ha='center', va='center', zorder=201)
 
     return
 
@@ -193,6 +197,7 @@ def cal_sep(df, group_id):
 def read_data(para):
 
     out = pd.read_excel(para['input'], sheet_name=0)
+    print(para['input'])
 
     for fn_condi in para['condition']:
         out2 = pd.read_excel(fn_condi, sheet_name=0)
@@ -310,6 +315,21 @@ def main(para):
 
 if __name__ == '__main__':
 
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    fh = logging.FileHandler('tcplot.log')
+    fh.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter('[%(levelname)s][%(asctime)s] %(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
     parser = argparse.ArgumentParser(
         description='Plot pivot charts from data')
 
@@ -335,6 +355,7 @@ if __name__ == '__main__':
                         nargs='+', help="grouping condition")
     parser.add_argument('--groupstyle', metavar='GROUPSTYLE', default=['box'], type=str,
                         nargs=1, help="grouping style (line or box)")
+    parser.add_argument('--grouptextblank', action='store_true')
     parser.add_argument('--chartstyle', metavar='CHARTSTYLE', default=['chart'], type=str,
                         nargs=1, help="chart style (chart or bar)")
     parser.add_argument('--spec', metavar='SPEC',
@@ -343,20 +364,24 @@ if __name__ == '__main__':
 
     args = vars(parser.parse_args())
 
+    logger.info('parsed input arguments.')
+
     args['x'] = args['x'][0]
     args['y'] = args['y'][0]
     args['t'] = args['t'][0]
     args['yscale'] = args['yscale'][0]
     args['input'] = args['input'][0]
+
     if args['output'] is not None:
         args['output'] = args['output'][0]
     args['groupstyle'] = args['groupstyle'][0]
     args['chartstyle'] = args['chartstyle'][0]
-
     if args['ymax'] is not None:
         args['ymax'] = args['ymax'][0]
 
     if args['gui']:
+
+        logger.info('starting gui.')
 
         # main containers
         root = Tk()
@@ -379,6 +404,7 @@ if __name__ == '__main__':
 
         # helper functions
         def get_wd():
+            logger.info('getting working directory.')
             tmp = fd.askdirectory()
             if tmp != '':
                 input_dirname.set(op.normpath(tmp))
@@ -388,12 +414,14 @@ if __name__ == '__main__':
             return
 
         def get_pf():
+            logger.info('getting plot setting profile.')
             tmp = fd.askopenfilename()
             if tmp != '':
                 input_profile.set(op.normpath(tmp))
             return
 
         def run():
+            logger.info('starting plotting.')
             if input_dirname.get() != '':
                 if input_profile.get() == '':
                     args['input'] = op.normpath(
