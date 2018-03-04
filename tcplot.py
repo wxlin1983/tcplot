@@ -16,6 +16,8 @@ import argparse
 input_DEFAULT = 'data.xlsx'
 output_DEFAULT = 'output.png'
 profile_DEFAULT = 'default.xlsx'
+fc_color_DEFAULT = 'tab:orange'
+
 t_DEFAULT = 'time'
 x_DEFAULT = 'id'
 y_DEFAULT = 'value'
@@ -68,12 +70,33 @@ def plot_data(df, ax, para):
     if my_dot_radius_in < dot_radius_min_in:
         my_dot_radius_in = dot_radius_min_in
 
+    # build dot color table
+    if para['chartstyle'] == 'chart':
+        color_idx = 0
+        if para['color'] in df.columns:
+            for gr in df[para['color']].unique():
+                if gr not in para['color_table'].keys():
+                    while 'C' + str(color_idx) in para['color_table'].values():
+                        color_idx += 1
+                    para['color_table'][gr] = 'C' + str(color_idx)
+
     # add dot if chartstyle is chart
     if para['chartstyle'] == 'chart':
         dot_radius_x = (my_dot_radius_in / fig_size_y_in *
                         ax_size_y_ratio) * ax_width
 
-        for x, y in zip(df.ORD, df['scaled_value']):
+        if para['color'] in df.columns:
+            color_columns = para['color']
+        else:
+            color_columns = 'ORD'
+
+        for x, y, z in zip(df.ORD, df['scaled_value'], df[color_columns]):
+
+            if color_columns == 'ORD':
+                fc_color = fc_color_DEFAULT
+            else:
+                fc_color = para['color_table'][z]
+
             ax.add_patch(
                 pch.Ellipse(
                     (x, y),
@@ -82,7 +105,7 @@ def plot_data(df, ax, para):
                                     (fig_size_x_in * ax_size_x_ratio / ax_width)),
                     clip_on=False,
                     zorder=200,
-                    fc='tab:orange',
+                    fc=fc_color,
                     ec='k',
                     linewidth=2
                 )
@@ -135,8 +158,6 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
                 )
             )
     elif mode == 'box':
-        if 'color_table' not in para.keys():
-            para['color_table'] = dict()
         color_idx = 0
         for s in sep:
             ax.plot([s, s], [para['ymin'], para['ymax']],
@@ -168,6 +189,7 @@ def add_group_sep(df, ax, group_id, level, para, mode='line'):
 
 def add_spec_line(df, ax, spec, label, para, col='r'):
 
+    logger.info('adding spec line: {:}: {:}'.format(label, spec))
     ax.plot([para['xmin'], para['xmax']],
             [spec, spec], '--', lw=1.0, zorder=1, color=col)
     ax.text(0, spec, '{:}: {:}'.format(label, spec),
@@ -197,11 +219,17 @@ def cal_sep(df, group_id):
 def read_data(para):
 
     out = pd.read_excel(para['input'], sheet_name=0)
-    print(para['input'])
+    logger.info('loaded data from \"{:}\".'.format(para['input']))
 
     for fn_condi in para['condition']:
-        out2 = pd.read_excel(fn_condi, sheet_name=0)
-        out = pd.merge(out2, out, how='outer', on=para['x'])
+        try:
+            out2 = pd.read_excel(fn_condi, sheet_name=0)
+            out = pd.merge(out2, out, how='outer', on=para['x'])
+            logger.info('loaded conditions from \"{:}\".'.format(fn_condi))
+        except:
+            logger.error(
+                'cannot load conditions from \"{:}\".'.format(fn_condi))
+            para['condition'].remove(fn_condi)
 
     out.fillna('NA', inplace=True)
     out['scaled_value'] = out[para['y']] * para['yscale']
@@ -210,6 +238,8 @@ def read_data(para):
 
 
 def group_data(df, para):
+
+    logger.info('grouping data.')
 
     if (para['group']) != None:
         allgroup = []
@@ -234,6 +264,7 @@ def group_data(df, para):
 
 def adjust_yticks(ax, para):
 
+    logger.info('adjusting yick numbers.')
     tmp = para['ymax']
     ex = 0
 
@@ -337,7 +368,7 @@ if __name__ == '__main__':
                         nargs=1, help="input excel or csv file")
     parser.add_argument('-c', '--condition', metavar='CONDITION', default=[],
                         nargs='+', help="condition excel or csv file")
-    parser.add_argument('--color', metavar='COLOR', default=[],
+    parser.add_argument('--color', metavar='COLOR', default=[''],
                         nargs=1, help="color")
     parser.add_argument('-o', '--output', metavar='OUTPUT',
                         nargs=1, help="output file path")
@@ -371,13 +402,14 @@ if __name__ == '__main__':
     args['t'] = args['t'][0]
     args['yscale'] = args['yscale'][0]
     args['input'] = args['input'][0]
-
     if args['output'] is not None:
         args['output'] = args['output'][0]
     args['groupstyle'] = args['groupstyle'][0]
     args['chartstyle'] = args['chartstyle'][0]
     if args['ymax'] is not None:
         args['ymax'] = args['ymax'][0]
+    args['color_table'] = dict()
+    args['color'] = args['color'][0]
 
     if args['gui']:
 
@@ -414,25 +446,36 @@ if __name__ == '__main__':
             return
 
         def get_pf():
-            logger.info('getting plot setting profile.')
+            logger.info('getting plot profile.')
             tmp = fd.askopenfilename()
             if tmp != '':
                 input_profile.set(op.normpath(tmp))
             return
 
         def run():
-            logger.info('starting plotting.')
             if input_dirname.get() != '':
-                if input_profile.get() == '':
+                logger.info('starting plotting.')
+                if input_input.get() == '':
                     args['input'] = op.normpath(
                         op.join(input_dirname.get(), input_DEFAULT))
-                    args['output'] = op.normpath(op.join(
-                        input_dirname.get(), output_DEFAULT))
                 else:
                     args['input'] = op.normpath(
                         op.join(input_dirname.get(), input_input.get()))
+                if input_output.get() == '':
+                    args['output'] = op.normpath(op.join(
+                        input_dirname.get(), output_DEFAULT))
+                else:
                     args['output'] = op.normpath(
                         op.join(input_dirname.get(), input_output.get()))
+                if not (input_cond0.get() == ''):
+                    args['condition'].append(op.normpath(
+                        op.join(input_dirname.get(), input_cond0.get())))
+                if not (input_cond1.get() == ''):
+                    args['condition'].append(op.normpath(
+                        op.join(input_dirname.get(), input_cond1.get())))
+                if not (input_cond2.get() == ''):
+                    args['condition'].append(op.normpath(
+                        op.join(input_dirname.get(), input_cond2.get())))
                 if data_x.get() != '':
                     args['x'] = data_x.get()
                 if data_y.get() != '':
@@ -456,6 +499,10 @@ if __name__ == '__main__':
                                           1: "line"}[group_style.get()]
                     args['group'] = [group_type0.get(), group_type1.get(),
                                      group_type2.get()]
+                if group_text_disable.get():
+                    args['grouptextblank'] = True
+                else:
+                    args['grouptextblank'] = False
                 if spec_enable.get():
                     args['spec'] = []
                     if (spec_name0.get() != '') and (spec_value0.get() != ''):
@@ -464,8 +511,11 @@ if __name__ == '__main__':
                     if (spec_name1.get() != '') and (spec_value1.get() != ''):
                         args['spec'].append(spec_name1.get())
                         args['spec'].append(spec_value1.get())
+            else:
+                logger.info(
+                    'no working directory set in gui, continuing with cli arguments')
 
-                main(args)
+            main(args)
             return
 
         def load_config():
@@ -531,7 +581,7 @@ if __name__ == '__main__':
 
         # row00
         input_b1 = Button(row00, width=6, text="folder", command=get_wd)
-        input_et1 = Entry(row00, width=58, textvariable=input_dirname)
+        input_et1 = Entry(row00, width=61, textvariable=input_dirname)
         input_b0 = Button(row00, width=6, text="run", command=run)
         input_b6 = Button(row00, width=6, text="help")
 
@@ -542,7 +592,7 @@ if __name__ == '__main__':
 
         # row01
         input_b4 = Button(row01, width=6, text="profile", command=get_pf)
-        input_et0 = Entry(row01, width=58, textvariable=input_profile)
+        input_et0 = Entry(row01, width=61, textvariable=input_profile)
         input_b2 = Button(row01, width=6, text="load",
                           command=load_config)
         input_b3 = Button(row01, width=6, text="save",
@@ -606,18 +656,22 @@ if __name__ == '__main__':
 
         # row 3
         group_enable = BooleanVar()
+        group_text_disable = BooleanVar()
         group_style = IntVar()
         group_type0 = StringVar()
         group_type1 = StringVar()
         group_type2 = StringVar()
 
         to_save.append(['group_enable', 'Boolean'])
+        to_save.append(['group_text_disable', 'Boolean'])
         to_save.append(['group_style', 'Int'])
         to_save.append(['group_type0', 'String'])
         to_save.append(['group_type1', 'String'])
         to_save.append(['group_type2', 'String'])
 
-        group_cb = Checkbutton(row3, text="enable", variable=group_enable)
+        group_cb0 = Checkbutton(row3, text="enable", variable=group_enable)
+        group_cb1 = Checkbutton(row3, text="hide text",
+                                variable=group_text_disable)
         group_rb0 = Radiobutton(
             row3, text="box", variable=group_style, value=0)
         group_rb1 = Radiobutton(
@@ -626,15 +680,16 @@ if __name__ == '__main__':
         group_et1 = Entry(row3, width=8, textvariable=group_type1)
         group_et2 = Entry(row3, width=8, textvariable=group_type2)
 
-        group_cb.grid(row=0, column=0)
-        group_rb0.grid(row=0, column=1)
-        group_rb1.grid(row=0, column=2)
-        Label(row3, text='group 1').grid(row=0, column=3)
-        group_et0.grid(row=0, column=4)
-        Label(row3, text='group 2').grid(row=0, column=5)
-        group_et1.grid(row=0, column=6)
-        Label(row3, text='group 3').grid(row=0, column=7)
-        group_et2.grid(row=0, column=8)
+        group_cb0.grid(row=0, column=0)
+        group_cb1.grid(row=0, column=1)
+        group_rb0.grid(row=0, column=2)
+        group_rb1.grid(row=0, column=3)
+        Label(row3, text='group 1').grid(row=0, column=4)
+        group_et0.grid(row=0, column=5)
+        Label(row3, text='group 2').grid(row=0, column=6)
+        group_et1.grid(row=0, column=7)
+        Label(row3, text='group 3').grid(row=0, column=8)
+        group_et2.grid(row=0, column=9)
 
         # row 4
         spec_enable = BooleanVar()
